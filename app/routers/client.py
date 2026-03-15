@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import User, ClientStation
 from app.auth import require_role
 from app.services.fusionsolar import client as fs
+from app.services import demo as demo_svc
 import calendar
 import datetime
 
@@ -41,6 +42,8 @@ def get_realtime_kpi(
     db: Session = Depends(get_db),
 ):
     codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return demo_svc.realtime_kpi()
     return _handle(fs.get_station_real_kpi, codes)
 
 
@@ -51,15 +54,14 @@ def get_daily_kpi(
     db: Session = Depends(get_db),
 ):
     codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return [demo_svc.daily_kpi(date)]
     try:
         dt = datetime.datetime.strptime(date, "%Y-%m-%d")
         collect_time = int(calendar.timegm(dt.timetuple()) * 1000)
     except ValueError:
         raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-    results = []
-    for code in codes:
-        results.append(_handle(fs.get_kpi_station_day, code, collect_time))
-    return results
+    return [_handle(fs.get_kpi_station_day, code, collect_time) for code in codes]
 
 
 @router.get("/kpi/monthly")
@@ -69,15 +71,14 @@ def get_monthly_kpi(
     db: Session = Depends(get_db),
 ):
     codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return [demo_svc.monthly_kpi(date)]
     try:
         dt = datetime.datetime.strptime(date + "-01", "%Y-%m-%d")
         collect_time = int(calendar.timegm(dt.timetuple()) * 1000)
     except ValueError:
         raise HTTPException(status_code=400, detail="date must be YYYY-MM")
-    results = []
-    for code in codes:
-        results.append(_handle(fs.get_kpi_station_month, code, collect_time))
-    return results
+    return [_handle(fs.get_kpi_station_month, code, collect_time) for code in codes]
 
 
 @router.get("/kpi/devices")
@@ -85,8 +86,9 @@ def get_device_kpi(
     current_user: User = Depends(_require_client),
     db: Session = Depends(get_db),
 ):
-    """Fetch real-time KPI for all inverters — gives temperature, efficiency, etc."""
     codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return [demo_svc.device_kpi()]
     results = []
     for code in codes:
         try:
@@ -106,10 +108,7 @@ def get_devices(
     db: Session = Depends(get_db),
 ):
     codes = _get_station_codes(current_user, db)
-    results = []
-    for code in codes:
-        results.append(_handle(fs.get_dev_list, code))
-    return results
+    return [_handle(fs.get_dev_list, code) for code in codes]
 
 
 @router.get("/alarms")
@@ -120,6 +119,8 @@ def get_alarms(
     db: Session = Depends(get_db),
 ):
     codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return [{"success": True, "data": demo_svc.alarms()}]
 
     def _parse(d):
         if d is None:
@@ -130,7 +131,4 @@ def get_alarms(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid date: {d}")
 
-    results = []
-    for code in codes:
-        results.append(_handle(fs.get_alarm_list, code, _parse(begin_date), _parse(end_date)))
-    return results
+    return [_handle(fs.get_alarm_list, code, _parse(begin_date), _parse(end_date)) for code in codes]

@@ -44,6 +44,21 @@ export default function Login() {
         <p style={s.foot}>
           Pas de compte ? <Link to="/register">Créer un compte</Link>
         </p>
+
+        {/* Demo credentials */}
+        <div style={s.demo}>
+          <p style={s.demoTitle}>Comptes démo</p>
+          <div style={s.demoRow}>
+            <span style={s.demoRole}>Client</span>
+            <code style={s.demoCode}>demo@solar.ma</code>
+            <code style={s.demoCode}>demo123</code>
+          </div>
+          <div style={s.demoRow}>
+            <span style={s.demoRole}>Employé</span>
+            <code style={s.demoCode}>employe@solar.ma</code>
+            <code style={s.demoCode}>demo123</code>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -60,4 +75,9 @@ const s = {
   btn: { marginTop: "1.5rem", width: "100%", padding: "0.75rem", background: "#F59E0B", border: "none", borderRadius: "8px", color: "#0F172A", fontSize: "1rem", fontWeight: "700" },
   error: { background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#FCA5A5", padding: "0.75rem", borderRadius: "8px", fontSize: "0.875rem", marginBottom: "0.5rem" },
   foot: { textAlign: "center", marginTop: "1.25rem", color: "#94A3B8", fontSize: "0.875rem" },
+  demo: { marginTop: "1.5rem", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "10px", padding: "0.875rem" },
+  demoTitle: { fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#F59E0B", marginBottom: "8px", fontWeight: "600" },
+  demoRow: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" },
+  demoRole: { fontSize: "11px", color: "#94A3B8", width: "48px", flexShrink: 0 },
+  demoCode: { fontSize: "12px", background: "#0F172A", border: "1px solid #334155", borderRadius: "4px", padding: "2px 6px", color: "#F1F5F9", fontFamily: "monospace" },
 };

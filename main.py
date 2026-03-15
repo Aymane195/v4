@@ -7,6 +7,10 @@ from app.routers import fusionsolar, auth, client, employee, soiling
 # Create all DB tables on startup
 Base.metadata.create_all(bind=engine)
 
+# Seed demo accounts (no-op if already exist)
+from app.services.demo import seed_demo_accounts
+seed_demo_accounts()
+
 app = FastAPI(
     title="Solar AI Monitoring Platform",
     description="Solar plant monitoring with FusionSolar API integration and AI-based soiling detection.",

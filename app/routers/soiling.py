@@ -22,6 +22,9 @@ def predict_for_station(
     station_code: str,
     current_user: User = Depends(get_current_user),
 ):
+    from app.services.demo import is_demo, soiling as demo_soiling
+    if is_demo(station_code):
+        return demo_soiling()
     try:
         kpi_data = fs.get_station_real_kpi([station_code])
     except RuntimeError as e:
