@@ -1,18 +1,28 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import SoilingGauge from "../components/SoilingGauge";
-import KpiCard from "../components/KpiCard";
-import BottomNav from "../components/BottomNav";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-const today = new Date();
+const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+const ALARM_LABEL = { 1: "Critique", 2: "Majeure", 3: "Mineure", 4: "Avertissement" };
+const ALARM_SEV = {
+  1: { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
+  2: { bg: "#FFF7ED", text: "#EA580C", border: "#FED7AA" },
+  3: { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  4: { bg: "#FEFCE8", text: "#CA8A04", border: "#FEF08A" },
+};
+
+function fmt(v, dec = 1) {
+  if (v == null || isNaN(Number(v))) return "--";
+  return Number(v).toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
 
 function useClock() {
   const [t, setT] = useState(new Date());
   useEffect(() => { const id = setInterval(() => setT(new Date()), 1000); return () => clearInterval(id); }, []);
-  return t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return t;
 }
 
 function useSettings() {
@@ -21,42 +31,174 @@ function useSettings() {
   return [s, upd];
 }
 
-function fmt(v, decimals = 0) {
-  if (v == null) return "--";
-  return parseFloat(v).toLocaleString("fr-FR", { maximumFractionDigits: decimals });
-}
+// ── Shared styles ─────────────────────────────────────────────────────────────
+const card = { background: "#fff", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "1.25rem" };
+const sectionTitle = { fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "1rem" };
+const fieldLbl = { fontSize: "12px", color: "#6B7280", marginBottom: "4px" };
+const fieldVal = { fontSize: "15px", fontWeight: "500", color: "#1A202C" };
+const inputSty = { display: "block", width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #E2E8F0", borderRadius: "6px", fontSize: "14px", color: "#1A202C", background: "#F8FAFC", boxSizing: "border-box", outline: "none" };
 
-const ALARM_COLOR = { 1: "#EF4444", 2: "#F97316", 3: "#F59E0B", 4: "#60A5FA" };
-const ALARM_LABEL = { 1: "Critique", 2: "Majeur", 3: "Mineur", 4: "Avertissement" };
-
-// ─── Toggle switch ────────────────────────────────────────────────────────────
-function Toggle({ value, onChange }) {
+// ── Live pill (station name + clock + EN DIRECT) ──────────────────────────────
+function LivePill({ stationName }) {
+  const clock = useClock();
+  const timeStr = clock.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return (
-    <div onClick={() => onChange(!value)} style={{ width: "52px", height: "28px", borderRadius: "999px", background: value ? "#F59E0B" : "#334155", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-      <div style={{ position: "absolute", top: "4px", left: value ? "28px" : "4px", width: "20px", height: "20px", borderRadius: "50%", background: "white", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
-      {value && <span style={{ position: "absolute", left: "7px", top: "6px", fontSize: "9px", color: "#0F172A", fontWeight: "800" }}>ON</span>}
+    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "0.5rem 1.25rem", textAlign: "center" }}>
+      <p style={{ fontWeight: "600", color: "#1A202C", fontSize: "14px" }}>{stationName}</p>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}>
+        <span style={{ color: "#6B7280", fontSize: "13px" }}>Live {timeStr}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: "3px", background: "#DCFCE7", color: "#16A34A", borderRadius: "999px", padding: "1px 8px", fontSize: "11px", fontWeight: "600" }}>
+          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22C55E", display: "inline-block" }} />
+          EN DIRECT
+        </span>
+      </div>
     </div>
   );
 }
 
-// ─── Accueil Tab ──────────────────────────────────────────────────────────────
-function AccueilTab({ kpi, deviceKpi, soiling, stations, alarmCount, onAlertes }) {
-  const clock = useClock();
-  const data         = kpi?.data?.[0]?.dataItemMap || {};
-  const power        = data.inverter_power ?? null;
-  const dayEnergy    = data.day_power ?? null;
-  const totalEnergy  = data.total_power ?? null;
-  const monthEnergy  = data.month_power ?? null;
-  const homeEnergy   = data.day_use_energy ?? null;
-  const gridPower    = data.use_power ?? data.day_on_grid_energy ?? null;
-  const co2Total     = data.reduce_carbon ?? (totalEnergy != null ? +(totalEnergy * 0.233).toFixed(0) : null);
-  const monthSavings = monthEnergy != null ? +(monthEnergy * 1.5).toFixed(0) : null;
+// ── Page header ───────────────────────────────────────────────────────────────
+function PageHeader({ title, stationName, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.5rem 2rem 1rem" }}>
+      <h1 style={{ fontSize: "1.75rem", fontWeight: "700", color: "#1A202C", margin: 0 }}>{title}</h1>
+      {right || <LivePill stationName={stationName} />}
+    </div>
+  );
+}
 
-  const soilingPct = soiling?.soiling_index ?? 0;
-  const isClean    = soilingPct < 0.05;
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+function Toggle({ value, onChange }) {
+  return (
+    <div onClick={() => onChange(!value)} style={{ width: "44px", height: "24px", borderRadius: "999px", background: value ? "#3B82F6" : "#CBD5E0", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+      <div style={{ position: "absolute", top: "2px", left: value ? "22px" : "2px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+    </div>
+  );
+}
+
+// ── Root dashboard ────────────────────────────────────────────────────────────
+export default function ClientDashboard() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState("accueil");
+  const [kpi, setKpi] = useState(null);
+  const [soiling, setSoiling] = useState(null);
+  const [stations, setStations] = useState([]);
+  const [deviceKpi, setDeviceKpi] = useState(null);
+  const [alarmCount, setAlarmCount] = useState(0);
+  const [lastSync, setLastSync] = useState(null);
+
+  const loadMain = useCallback(async () => {
+    try {
+      const [s, k, dev, al] = await Promise.allSettled([
+        api.get("/client/stations"),
+        api.get("/client/kpi/realtime"),
+        api.get("/client/kpi/devices"),
+        api.get("/client/alarms"),
+      ]);
+      if (s.status === "fulfilled") setStations(s.value.data || []);
+      if (k.status === "fulfilled") { setKpi(k.value.data); setLastSync(Date.now()); }
+      if (dev.status === "fulfilled") setDeviceKpi(dev.value.data);
+      if (al.status === "fulfilled") {
+        const all = [];
+        (al.value.data || []).forEach(r => (r?.data || []).forEach(a => all.push(a)));
+        setAlarmCount(all.length);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadMain();
+    const iv = setInterval(loadMain, 10 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, [loadMain]);
+
+  useEffect(() => {
+    if (stations[0]?.station_code) {
+      api.get(`/soiling/${stations[0].station_code}`).then(r => setSoiling(r.data)).catch(() => {});
+    }
+  }, [stations]);
+
   const stationName = stations[0]?.station_name || stations[0]?.station_code || "Mon installation";
 
-  const [livePower, setLivePower] = useState(power);
+  const NAV = [
+    { id: "accueil",  label: "Accueil",  icon: "🏠" },
+    { id: "analyses", label: "Analyses", icon: "📊" },
+    { id: "alertes",  label: "Alertes",  icon: "🔔", badge: alarmCount },
+    { id: "reglages", label: "Réglages", icon: "⚙️" },
+  ];
+
+  return (
+    <>
+      <style>{`
+        body { margin: 0; background: #F0F4F8; font-family: 'Segoe UI', system-ui, sans-serif; }
+        input[type=range] { accent-color: #3B82F6; }
+      `}</style>
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+
+        {/* ── Sidebar ── */}
+        <aside style={{ width: "220px", minHeight: "100vh", background: "#fff", borderRight: "1px solid #E2E8F0", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+          <div style={{ padding: "1.25rem 1.25rem 0.75rem", borderBottom: "1px solid #F1F5F9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+              <div style={{ width: "32px", height: "32px", background: "#F59E0B", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>☀️</div>
+              <span style={{ fontWeight: "700", fontSize: "0.95rem", color: "#1A202C" }}>SolarAI Monitor</span>
+            </div>
+            <p style={{ fontSize: "11px", color: "#94A3B8", marginLeft: "40px" }}>Optimisez votre énergie solaire</p>
+          </div>
+
+          <nav style={{ flex: 1, padding: "0.75rem" }}>
+            {NAV.map(n => (
+              <button key={n.id} onClick={() => setTab(n.id)} style={{
+                display: "flex", alignItems: "center", gap: "10px", width: "100%",
+                padding: "0.6rem 0.875rem", borderRadius: "8px", border: "none", cursor: "pointer",
+                marginBottom: "2px", fontSize: "0.9rem", textAlign: "left",
+                fontWeight: tab === n.id ? "600" : "400",
+                background: tab === n.id ? "#EFF6FF" : "transparent",
+                color: tab === n.id ? "#2563EB" : "#4B5563",
+              }}>
+                <span style={{ fontSize: "1rem" }}>{n.icon}</span>
+                <span style={{ flex: 1 }}>{n.label}</span>
+                {n.badge > 0 && (
+                  <span style={{ background: "#EF4444", color: "#fff", borderRadius: "999px", padding: "1px 7px", fontSize: "11px", fontWeight: "700" }}>{n.badge}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+
+          <div style={{ padding: "0.875rem 1.25rem", borderTop: "1px solid #F1F5F9" }}>
+            <button onClick={() => { logout(); navigate("/login"); }} style={{ width: "100%", padding: "0.5rem", background: "none", border: "1px solid #E2E8F0", borderRadius: "6px", color: "#6B7280", fontSize: "13px", cursor: "pointer", marginBottom: "6px" }}>
+              ⏻ Déconnexion
+            </button>
+            <p style={{ fontSize: "11px", color: "#A0AEC0", textAlign: "center" }}>Version v2.1.0</p>
+            <p style={{ fontSize: "11px", color: "#A0AEC0", textAlign: "center" }}>SolarAI, Casablanca, 2024</p>
+          </div>
+        </aside>
+
+        {/* ── Main content ── */}
+        <main style={{ flex: 1, minHeight: "100vh", background: "#F0F4F8", overflowY: "auto" }}>
+          {tab === "accueil"  && <AccueilTab  kpi={kpi} soiling={soiling} alarmCount={alarmCount} stationName={stationName} onAlertes={() => setTab("alertes")} />}
+          {tab === "analyses" && <AnalysesTab kpi={kpi} deviceKpi={deviceKpi} stations={stations} stationName={stationName} />}
+          {tab === "alertes"  && <AlertesTab  stationName={stationName} />}
+          {tab === "reglages" && <ReglagesTab kpi={kpi} lastSync={lastSync} stationName={stationName} />}
+        </main>
+      </div>
+    </>
+  );
+}
+
+// ── Accueil Tab ───────────────────────────────────────────────────────────────
+function AccueilTab({ kpi, soiling, alarmCount, stationName, onAlertes }) {
+  const d = kpi?.data?.[0]?.dataItemMap || {};
+  const dayEnergy    = d.day_power ?? null;
+  const totalEnergy  = d.total_power ?? null;
+  const monthSavings = d.month_power != null ? Math.round(d.month_power * 1.5) : null;
+  const co2Total     = d.reduce_carbon ?? (totalEnergy != null ? Math.round(totalEnergy * 0.233) : null);
+  const homeEnergy   = d.day_use_energy ?? null;
+  const gridPower    = d.use_power ?? null;
+  const dayGrid      = d.day_on_grid_energy ?? null;
+  const soilingIdx   = soiling?.soiling_index ?? 0;
+
+  // 3-second live production poll
+  const [livePower, setLivePower] = useState(d.inverter_power ?? null);
   const [pulse, setPulse] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -76,257 +218,275 @@ function AccueilTab({ kpi, deviceKpi, soiling, stations, alarmCount, onAlertes }
   }, []);
 
   return (
-    <div style={s.tab}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <p style={s.brand}>SOLAR AI-OPTIMIZER</p>
-          <p style={s.pageTitle}>{stationName}</p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
-          <p style={s.clock}>{clock}</p>
-          <div style={s.live}><span style={s.liveDot} />Live</div>
-        </div>
-      </div>
+    <div>
+      <PageHeader title="Accueil" stationName={stationName} />
+      <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
 
-      {/* Status banner */}
-      <div style={{ ...s.banner, background: isClean ? "rgba(16,185,129,0.12)" : "rgba(249,115,22,0.12)", borderColor: isClean ? "#10B981" : "#F97316" }}>
-        <span style={{ color: isClean ? "#10B981" : "#F97316", fontWeight: 700, fontSize: "14px" }}>
-          {isClean ? "Panneaux propres — production optimale" : "⚠ Nettoyage recommandé"}
-        </span>
-        <span style={{ color: "#64748B", fontSize: "12px" }}>{soiling?.recommendation || "Analyse en cours..."}</span>
-      </div>
-
-      {/* Live production */}
-      <div style={{ background: pulse ? "rgba(245,158,11,0.12)" : "#1E293B", border: `1px solid ${pulse ? "#F59E0B" : "#334155"}`, borderRadius: "14px", padding: "0.875rem 1.25rem", transition: "background 0.4s, border-color 0.4s", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981" }} />
-            <p style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#64748B", fontWeight: "700" }}>Énergie produite en ce moment</p>
+        {/* Indice de Propreté */}
+        <div style={card}>
+          <p style={sectionTitle}>Indice de Propreté (IA)</p>
+          <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0" }}>
+            <SoilingGauge index={soilingIdx} size={340} />
           </div>
-          <p style={{ fontSize: "2rem", fontWeight: "800", color: "#F59E0B", lineHeight: 1.1 }}>
-            {livePower != null ? fmt(livePower, 2) : "--"}
-            <span style={{ fontSize: "0.85rem", fontWeight: "500", color: "#94A3B8", marginLeft: "6px" }}>kW</span>
-          </p>
         </div>
-        <span style={{ fontSize: "2rem" }}>⚡</span>
-      </div>
 
-      {/* Flux énergétique card — gauge + flow */}
-      <div style={s.fluxCard}>
-        <p style={s.fluxTitle}>FLUX D'ÉNERGIE EN DIRECT</p>
-        <div style={{ display: "flex", justifyContent: "center", margin: "0.5rem 0" }}>
-          <SoilingGauge index={soilingPct} size={160} />
+        {/* Production + Flux row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "1rem" }}>
+
+          {/* Production Actuelle */}
+          <div style={{ ...card, transition: "border-color 0.4s", borderColor: pulse ? "#6366F1" : "#E2E8F0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <p style={sectionTitle}>Production Actuelle</p>
+              <span style={{ background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", borderRadius: "999px", padding: "2px 10px", fontSize: "12px", fontWeight: "600" }}>
+                ⟳ Live
+              </span>
+            </div>
+            <p style={{ fontSize: "3rem", fontWeight: "800", color: "#6366F1", lineHeight: 1 }}>
+              {livePower != null ? fmt(livePower, 1) : "--"}
+              <span style={{ fontSize: "1.2rem", fontWeight: "500", color: "#94A3B8", marginLeft: "6px" }}>kW</span>
+            </p>
+          </div>
+
+          {/* Flux d'Énergie */}
+          <div style={card}>
+            <p style={sectionTitle}>Flux d'Énergie</p>
+            <EnergyFlow power={livePower} dayEnergy={dayEnergy} homeEnergy={homeEnergy} gridPower={gridPower} dayGrid={dayGrid} />
+          </div>
         </div>
-        {/* Flow diagram */}
-        <div style={s.flow}>
-          <div style={s.flowNode}>
-            <div style={{ ...s.flowIcon, borderColor: "#F59E0B" }}>☀️</div>
-            <p style={s.flowLabel}>Panneaux solaires</p>
-            <p style={{ ...s.flowVal, color: "#F59E0B" }}>{power != null ? `${fmt(power, 2)} kW` : "--"}</p>
-          </div>
-          <div style={s.flowLine}><div style={s.flowDot} /><div style={s.flowDot} /><div style={s.flowDot} /></div>
-          <div style={s.flowNode}>
-            <div style={{ ...s.flowIcon, borderColor: "#60A5FA", fontSize: "1rem" }}>⚡</div>
-            <p style={s.flowLabel}>ONDULEUR</p>
-          </div>
-          <div style={s.flowLine}><div style={s.flowDot} /><div style={s.flowDot} /><div style={s.flowDot} /></div>
-          <div style={s.flowNode}>
-            <div style={{ ...s.flowIcon, borderColor: "#10B981" }}>🏠</div>
-            <p style={s.flowLabel}>Domicile</p>
-            <p style={{ ...s.flowVal, color: "#10B981" }}>{homeEnergy != null ? `${fmt(homeEnergy, 2)} kW` : "--"}</p>
-          </div>
-          <div style={s.flowLine}><div style={s.flowDot} /><div style={s.flowDot} /><div style={s.flowDot} /></div>
-          <div style={s.flowNode}>
-            <div style={{ ...s.flowIcon, borderColor: "#A78BFA" }}>🔌</div>
-            <p style={s.flowLabel}>Réseau</p>
-            <p style={{ ...s.flowVal, color: "#A78BFA" }}>{gridPower != null ? `${fmt(gridPower, 2)} kW` : "--"}</p>
+
+        {/* Bottom 4 KPI cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+          <BottomKpi label="Production Aujourd'hui" value={`${fmt(dayEnergy, 1)} kWh`} />
+          <BottomKpi label="Économies ce Mois"      value={`${fmt(monthSavings, 0)} DH`} />
+          <BottomKpi label="CO₂ Évité (Total)"      value={`${fmt(co2Total, 0)} kg`} />
+          <div style={{ ...card, cursor: alarmCount > 0 ? "pointer" : "default" }} onClick={alarmCount > 0 ? onAlertes : undefined}>
+            <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "0.5rem" }}>Résumé des Alarmes</p>
+            {alarmCount === 0 ? (
+              <>
+                <p style={{ fontSize: "13px", fontWeight: "600", color: "#16A34A" }}>Statut: Normal.</p>
+                <p style={{ fontSize: "13px", color: "#16A34A" }}>Aucune alerte active.</p>
+              </>
+            ) : (
+              <p style={{ fontSize: "1.1rem", fontWeight: "700", color: "#EF4444" }}>{alarmCount} alarme{alarmCount > 1 ? "s" : ""} active{alarmCount > 1 ? "s" : ""}</p>
+            )}
           </div>
         </div>
       </div>
-
-      {/* KPI cards */}
-      <div style={s.kpiGrid}>
-        <KpiCard label="Production" value={power} unit="kW" sub="en ce moment" color="#F59E0B" icon="⚡" />
-        <KpiCard label="Aujourd'hui" value={dayEnergy} unit="kWh" sub="produit ce jour" color="#10B981" icon="📅" />
-        <KpiCard label="Économies" value={monthSavings} unit="DH" sub="ce mois-ci" color="#10B981" icon="💰" />
-        <KpiCard label="CO₂ évité" value={co2Total} unit="kg" sub="depuis installation" color="#A78BFA" icon="🌍" />
-      </div>
-
-      {/* Alarm chip */}
-      <button onClick={onAlertes} style={{ ...s.alarmChip, ...(alarmCount > 0 ? s.alarmActive : {}) }}>
-        🔔 {alarmCount > 0 ? `${alarmCount} alarme(s) active(s) — voir détails` : "Aucune alarme active"}
-      </button>
     </div>
   );
 }
 
-// ─── Analyses Tab ─────────────────────────────────────────────────────────────
-function AnalysesTab({ stationCodes, kpi, deviceKpi }) {
-  const [period, setPeriod]   = useState("mois");
-  const [mode, setMode]       = useState("production");
+function BottomKpi({ label, value }) {
+  return (
+    <div style={card}>
+      <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "0.5rem" }}>{label}</p>
+      <p style={{ fontSize: "1.5rem", fontWeight: "700", color: "#1A202C" }}>{value}</p>
+    </div>
+  );
+}
+
+function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
+  const Node = ({ icon, label }) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+      <div style={{ width: "52px", height: "52px", border: "1px solid #E2E8F0", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", background: "#F8FAFC" }}>
+        {icon}
+      </div>
+      <span style={{ fontSize: "11px", color: "#6B7280", textAlign: "center", maxWidth: "70px", lineHeight: 1.3 }}>{label}</span>
+    </div>
+  );
+
+  const Arrow = ({ top, bottom }) => (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", padding: "0 4px" }}>
+      <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151" }}>{top} kW</span>
+      <div style={{ width: "100%", display: "flex", alignItems: "center" }}>
+        <div style={{ flex: 1, height: "2px", background: "#CBD5E0" }} />
+        <span style={{ color: "#CBD5E0", fontSize: "10px", marginLeft: "1px" }}>▶</span>
+      </div>
+      <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151" }}>{bottom} kW</span>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", paddingTop: "0.25rem" }}>
+      <Node icon="☀️" label="Panneaux Solaires" />
+      <Arrow top={fmt(power, 1)} bottom={fmt(dayEnergy, 1)} />
+      <Node icon="⚡" label="Onduleur" />
+      <Arrow top={fmt(homeEnergy, 1)} bottom={fmt(gridPower, 1)} />
+      <Node icon="🏠" label="Maison & Réseau Électrique" />
+      <Arrow top={fmt(gridPower, 1)} bottom={fmt(dayGrid, 1)} />
+      <Node icon="🔌" label="Réseau" />
+    </div>
+  );
+}
+
+// ── Analyses Tab ──────────────────────────────────────────────────────────────
+function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
+  const [period, setPeriod] = useState("mois");
+  const [mode, setMode]     = useState("production");
   const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]     = useState(false);
 
-  const data          = kpi?.data?.[0]?.dataItemMap || {};
-  const totalEnergy   = data.total_power ?? null;
-  const totalSavings  = totalEnergy != null ? (totalEnergy * 1.5).toFixed(0) : null;
-  const co2Total      = data.reduce_carbon ?? (totalEnergy != null ? +(totalEnergy * 0.233).toFixed(0) : null);
-  const trees         = co2Total != null ? Math.round(co2Total / 21) : null;
-  const radiation     = data.radiation_intensity ?? null;
-  const gridInjection = data.day_on_grid_energy ?? null;
-  const panelTemp     = deviceKpi?.temperature ?? null;
+  const d = kpi?.data?.[0]?.dataItemMap || {};
+  const totalEnergy  = d.total_power ?? null;
+  const totalSavings = totalEnergy != null ? Math.round(totalEnergy * 1.5) : null;
+  const co2Total     = d.reduce_carbon ?? (totalEnergy != null ? Math.round(totalEnergy * 0.233) : null);
+  const trees        = co2Total != null ? Math.round(co2Total / 21) : null;
+  const radiation    = d.radiation_intensity ?? null;
+  const dayGrid      = d.day_on_grid_energy ?? null;
+  const panelTemp    = deviceKpi?.data?.[0]?.dataItemMap?.temperature ?? null;
 
-  const fetchData = useCallback(async () => {
-    if (!stationCodes.length) return;
+  const stationCode = stations[0]?.station_code;
+
+  useEffect(() => {
+    if (!stationCode) return;
     setLoading(true);
-    try {
-      if (period === "mois") {
-        const results = [];
-        for (let i = 0; i < 12; i++) {
-          const d = new Date(today.getFullYear(), i, 1);
-          const dateStr = `${d.getFullYear()}-${String(i + 1).padStart(2, "0")}`;
-          try {
-            const res = await api.get(`/client/kpi/monthly?date=${dateStr}`);
-            const val = res.data?.[0]?.data?.[0]?.dataItemMap?.month_power ?? 0;
-            results.push({ name: MONTHS_FR[i], kWh: parseFloat(val) || 0 });
-          } catch { results.push({ name: MONTHS_FR[i], kWh: 0 }); }
-        }
-        setChartData(results);
-      } else if (period === "jour") {
-        const results = [];
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(today); d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().slice(0, 10);
-          const dayLabel = d.toLocaleDateString("fr-FR", { weekday: "short" });
-          try {
-            const res = await api.get(`/client/kpi/daily?date=${dateStr}`);
-            const val = res.data?.[0]?.data?.[0]?.dataItemMap?.day_power ?? 0;
-            results.push({ name: dayLabel, kWh: parseFloat(val) || 0 });
-          } catch { results.push({ name: dayLabel, kWh: 0 }); }
-        }
-        setChartData(results);
-      } else {
-        const results = [];
-        for (let y = today.getFullYear() - 2; y <= today.getFullYear(); y++) {
-          const dateStr = `${y}-01`;
-          try {
-            const res = await api.get(`/client/kpi/monthly?date=${dateStr}`);
-            const val = res.data?.[0]?.data?.[0]?.dataItemMap?.month_power ?? 0;
-            results.push({ name: String(y), kWh: parseFloat(val) || 0 });
-          } catch { results.push({ name: String(y), kWh: 0 }); }
-        }
-        setChartData(results);
-      }
-    } finally { setLoading(false); }
-  }, [period, stationCodes]);
+    const now = new Date();
+    const yr  = now.getFullYear();
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    async function load() {
+      try {
+        let data = [];
+        if (period === "jour") {
+          const rows = await Promise.all(Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(now); d.setDate(d.getDate() - (6 - i));
+            const str = d.toISOString().slice(0, 10);
+            return api.get(`/client/kpi/daily?date=${str}`)
+              .then(r => ({ name: d.toLocaleDateString("fr-FR", { weekday: "short" }), val: r.data?.data?.[0]?.dataItemMap?.day_power ?? 0 }))
+              .catch(() => ({ name: "", val: 0 }));
+          }));
+          data = rows;
+        } else if (period === "mois") {
+          const rows = await Promise.all(Array.from({ length: 12 }, (_, i) => {
+            const m = String(i + 1).padStart(2, "0");
+            return api.get(`/client/kpi/monthly?month=${yr}-${m}`)
+              .then(r => ({ name: MONTHS[i], val: r.data?.data?.[0]?.dataItemMap?.month_power ?? 0 }))
+              .catch(() => ({ name: MONTHS[i], val: 0 }));
+          }));
+          data = rows;
+        } else {
+          const rows = await Promise.all(Array.from({ length: 3 }, (_, i) => {
+            const y = yr - 2 + i;
+            return api.get(`/client/kpi/monthly?month=${y}-06`)
+              .then(r => ({ name: String(y), val: (r.data?.data?.[0]?.dataItemMap?.month_power ?? 0) * 12 }))
+              .catch(() => ({ name: String(y), val: 0 }));
+          }));
+          data = rows;
+        }
+        setChartData(data);
+      } finally { setLoading(false); }
+    }
+    load();
+  }, [period, stationCode]);
 
-  const chartValues = mode === "economies" ? chartData.map(d => ({ ...d, val: +(d.kWh * 1.5).toFixed(0) })) : chartData.map(d => ({ ...d, val: d.kWh }));
-  const total = chartData.reduce((a, d) => a + d.kWh, 0);
-  const peak  = Math.max(...chartData.map(d => d.kWh), 0);
-  const avg   = chartData.length ? total / chartData.length : 0;
+  const chartVals = mode === "economies" ? chartData.map(r => ({ ...r, val: Math.round(r.val * 1.5) })) : chartData;
+  const total = chartVals.reduce((s, r) => s + (r.val || 0), 0);
+  const peak  = Math.max(...chartVals.map(r => r.val || 0), 0);
+  const avg   = chartVals.length > 0 ? total / chartVals.length : 0;
+  const unit  = mode === "economies" ? "DH" : "kWh";
 
   return (
-    <div style={s.tab}>
-      <div style={s.header}>
-        <div>
-          <p style={s.pageTitle}>Analyses & historique</p>
-          <p style={{ color: "#64748B", fontSize: "12px" }}>Suivez l'évolution de votre installation</p>
+    <div>
+      <PageHeader title="Analyses" stationName={stationName} right={
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", display: "flex", overflow: "hidden" }}>
+            {[["jour","Jour"],["mois","Mois"],["année","Année"]].map(([id, lbl]) => (
+              <button key={id} onClick={() => setPeriod(id)} style={{
+                padding: "0.4rem 1.1rem", border: "none", cursor: "pointer", fontSize: "14px",
+                fontWeight: period === id ? "600" : "400",
+                background: period === id ? "#1A202C" : "#fff",
+                color: period === id ? "#fff" : "#4B5563",
+              }}>{lbl}</button>
+            ))}
+          </div>
+          <LivePill stationName={stationName} />
+        </div>
+      } />
+
+      <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+        {/* Chart + side stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: "1rem" }}>
+
+          {/* Chart card */}
+          <div style={card}>
+            <p style={sectionTitle}>Sélection de Période</p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "1rem" }}>
+              {[["production","Production (kWh)"],["economies","Économies (DH)"]].map(([id, lbl]) => (
+                <button key={id} onClick={() => setMode(id)} style={{
+                  padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #E2E8F0", cursor: "pointer", fontSize: "13px",
+                  fontWeight: mode === id ? "600" : "400",
+                  background: mode === id ? "#1A202C" : "#fff",
+                  color: mode === id ? "#fff" : "#4B5563",
+                }}>{lbl}</button>
+              ))}
+            </div>
+            {loading ? (
+              <div style={{ height: "220px", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8" }}>Chargement...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartVals} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#94A3B8", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#94A3B8", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", fontSize: "12px" }}
+                    formatter={v => [`${fmt(v, 1)} ${unit}`, mode === "economies" ? "Économies" : "Production"]}
+                  />
+                  <Bar dataKey="val" fill="#14B8A6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Side stat cards */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {[
+              [`Production Totale (${period === "mois" ? "Mois" : period === "jour" ? "Semaine" : "Année"})`, `${fmt(total, 1)} ${unit}`],
+              ["Valeur de Crête (Meilleur Jour)", `${fmt(peak, 1)} ${unit}`],
+              ["Valeur Moyenne (Jour)", `${fmt(avg, 1)} ${unit}`],
+            ].map(([lbl, val]) => (
+              <div key={lbl} style={card}>
+                <p style={{ fontSize: "12px", color: "#6B7280", marginBottom: "4px" }}>{lbl}</p>
+                <p style={{ fontSize: "1.4rem", fontWeight: "700", color: "#1A202C" }}>{val}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 6 detail cards 3×2 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
+          <DetailCard icon="☀️" label="Total Énergie Produite"    value={totalEnergy != null ? `${fmt(totalEnergy, 0)} kWh` : "--"} sub={`Année d'installation: ${new Date().getFullYear() - 2}`} />
+          <DetailCard icon="💰" label="Total Économies Réalisées" value={totalSavings != null ? `${fmt(totalSavings, 0)} DH` : "--"} sub="depuis installation" />
+          <DetailCard icon="🌍" label="CO₂ Évité (Total)"         value={co2Total != null ? `${fmt(co2Total, 0)} kg` : "--"} sub={trees != null ? `Équivalent à: ${fmt(trees, 0)} arbres plantés` : null} />
+          <DetailCard icon="🌡️" label="Température des Panneaux"  value={panelTemp != null ? `${fmt(panelTemp, 0)} °C` : "--"} />
+          <DetailCard icon="☀️" label="Irradiation Solaire"        value={`${fmt(radiation, 0)} W/m²`} />
+          <DetailCard icon="⚡" label="Injection Réseau"           value={dayGrid != null ? `${fmt(dayGrid, 1)} kW` : "--"} />
         </div>
       </div>
-
-      {/* Period toggle */}
-      <div style={s.toggleRow}>
-        {[["jour","Jour"],["mois","Mois"],["année","Année"]].map(([id, lbl]) => (
-          <button key={id} onClick={() => setPeriod(id)}
-            style={{ ...s.toggleBtn, ...(period === id ? s.toggleActive : {}) }}>
-            {lbl}
-            {period === id && <span style={s.activePill}>ACTIVE</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Mode sub-toggle */}
-      <div style={s.modeRow}>
-        <button onClick={() => setMode("production")}
-          style={{ ...s.modeBtn, ...(mode === "production" ? s.modeActive : {}) }}>
-          ⚡ Production
-          {mode === "production" && <span style={s.activePill}>ACTIVE</span>}
-        </button>
-        <button onClick={() => setMode("economies")}
-          style={{ ...s.modeBtn, ...(mode === "economies" ? s.modeActive : {}) }}>
-          💰 Économies
-          {mode === "economies" && <span style={s.activePill}>ACTIVE</span>}
-        </button>
-      </div>
-
-      {/* Bar chart */}
-      <div style={s.chartWrap}>
-        {loading ? (
-          <div style={s.loading}>Chargement...</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartValues} margin={{ top: 16, right: 4, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: "#64748B", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748B", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: "#0F172A", border: "1px solid #334155", borderRadius: "10px", color: "#F1F5F9", fontSize: "12px" }}
-                cursor={{ fill: "rgba(245,158,11,0.08)" }}
-                formatter={v => [`${fmt(v)} ${mode === "economies" ? "DH" : "kWh"}`, mode === "economies" ? "Économies" : "Production"]}
-              />
-              <Bar dataKey="val" fill="#F59E0B" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* Summary chips */}
-      <div style={s.summaryRow}>
-        <div style={s.chip}><span style={s.chipVal}>{fmt(total)}</span><span style={s.chipLbl}>Total kWh</span></div>
-        <div style={s.chip}><span style={s.chipVal}>{fmt(peak)}</span><span style={s.chipLbl}>Pic kWh</span></div>
-        <div style={s.chip}><span style={s.chipVal}>{fmt(avg, 0)}</span><span style={s.chipLbl}>Moyenne</span></div>
-      </div>
-
-      {/* Detailed indicators */}
-      <p style={{ fontSize: "11px", fontWeight: "700", letterSpacing: "0.1em", color: "#64748B", textTransform: "uppercase" }}>
-        Indicateurs détaillés
-      </p>
-      <div style={s.kpiGrid}>
-        <DetailCard icon="📦" label="Énergie totale produite" value={fmt(totalEnergy)} unit="kWh" sub={`depuis ${today.getFullYear() - 2}`} color="#F59E0B" />
-        <DetailCard icon="🏛️" label="Économies totales" value={totalSavings != null ? fmt(totalSavings) : null} unit="DH" sub="depuis installation" color="#10B981" />
-        <DetailCard icon="🌍" label="CO₂ évité au total" value={co2Total != null ? fmt(co2Total) : null} unit="kg" sub={trees != null ? `≈ ${fmt(trees)} arbres plantés` : null} color="#A78BFA" />
-        <DetailCard icon="🌡️" label="Température panneaux" value={panelTemp != null ? fmt(panelTemp, 1) : null} unit="°C" sub="surface capteurs" color="#F97316" />
-        <DetailCard icon="☀️" label="Irradiance solaire" value={fmt(radiation, 0)} unit="W/m²" sub="rayonnement actuel" color="#60A5FA" />
-        <DetailCard icon="↗️" label="Injection réseau" value={gridInjection != null ? fmt(gridInjection, 2) : null} unit="kW" sub="surplus envoyé" color="#F59E0B" />
-      </div>
     </div>
   );
 }
 
-function DetailCard({ icon, label, value, unit, sub, color }) {
-  if (value == null) return null;
+function DetailCard({ icon, label, value, sub }) {
   return (
-    <div style={{ background: "#1E293B", border: "1px solid #1E3A5F", borderRadius: "14px", padding: "1rem", display: "flex", flexDirection: "column", gap: "4px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-        <span style={{ fontSize: "1rem" }}>{icon}</span>
-        <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748B", fontWeight: "600" }}>{label}</p>
+    <div style={{ ...card, display: "flex", alignItems: "flex-start", gap: "12px" }}>
+      <div style={{ width: "40px", height: "40px", background: "#F0F4F8", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+        {icon}
       </div>
-      <p style={{ fontSize: "1.4rem", fontWeight: "800", color, lineHeight: 1.1 }}>
-        {value} <span style={{ fontSize: "0.8rem", fontWeight: "500", color: "#94A3B8" }}>{unit}</span>
-      </p>
-      {sub && <p style={{ fontSize: "11px", color: "#64748B" }}>{sub}</p>}
+      <div>
+        <p style={{ fontSize: "12px", color: "#6B7280", marginBottom: "2px" }}>{label}</p>
+        <p style={{ fontSize: "1.2rem", fontWeight: "700", color: "#1A202C" }}>{value}</p>
+        {sub && <p style={{ fontSize: "11px", color: "#94A3B8", marginTop: "2px" }}>{sub}</p>}
+      </div>
     </div>
   );
 }
 
-// ─── Alertes Tab ──────────────────────────────────────────────────────────────
-function AlertesTab() {
-  const [alarms, setAlarms] = useState([]);
+// ── Alertes Tab ───────────────────────────────────────────────────────────────
+function AlertesTab({ stationName }) {
+  const [alarms, setAlarms]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState(0);
+  const [filter, setFilter]   = useState(0);
   const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
@@ -341,316 +501,200 @@ function AlertesTab() {
       .finally(() => setLoading(false));
   }, []);
 
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  alarms.forEach(a => { if (counts[a.lev] != null) counts[a.lev]++; });
   const visible = filter === 0 ? alarms : alarms.filter(a => a.lev === filter);
 
   return (
-    <div style={s.tab}>
-      <div style={s.header}>
-        <div>
-          <p style={s.pageTitle}>Alertes</p>
-          <p style={{ color: "#64748B", fontSize: "12px" }}>Notifications de votre installation</p>
-        </div>
-        {alarms.length > 0 && <span style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#FCA5A5", borderRadius: "999px", padding: "3px 10px", fontSize: "12px" }}>{alarms.length}</span>}
-      </div>
+    <div>
+      <PageHeader title="Alertes" stationName={stationName} />
+      <div style={{ padding: "0 1.5rem 2rem" }}>
+        <p style={{ color: "#4B5563", fontSize: "15px", marginBottom: "1rem" }}>
+          Total: <strong>{alarms.length}</strong> active alarm{alarms.length !== 1 ? "s" : ""}
+        </p>
 
-      {alarms.length > 0 && (
-        <div style={s.toggleRow}>
-          {[[0,"Tous"],[1,"Critique"],[2,"Majeur"],[3,"Mineur"],[4,"Avert."]].map(([lev, lbl]) => (
-            <button key={lev} onClick={() => setFilter(lev)}
-              style={{ ...s.toggleBtn, ...(filter === lev ? { ...s.toggleActive, background: lev === 0 ? "#F59E0B" : ALARM_COLOR[lev] } : {}) }}>
-              {lbl}
-            </button>
-          ))}
+        {/* Filter tabs */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+          {[[0,"Tous",alarms.length],[1,"Critique",counts[1]],[2,"Majeure",counts[2]],[3,"Mineure",counts[3]],[4,"Avertissement",counts[4]]].map(([lev, lbl, cnt]) => {
+            const sel = filter === lev;
+            const sev = lev > 0 ? ALARM_SEV[lev] : null;
+            return (
+              <button key={lev} onClick={() => setFilter(lev)} style={{
+                padding: "0.4rem 1rem", borderRadius: "6px", cursor: "pointer", fontSize: "14px",
+                fontWeight: sel ? "600" : "400",
+                border: sel ? `2px solid ${sev ? sev.text : "#374151"}` : "1px solid #E2E8F0",
+                background: sel ? (sev ? sev.bg : "#F1F5F9") : "#fff",
+                color: sel ? (sev ? sev.text : "#374151") : "#6B7280",
+              }}>
+                {lbl} ({cnt})
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {loading ? (
-        <div style={s.loading}>Chargement...</div>
-      ) : visible.length === 0 ? (
-        <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "14px", padding: "2rem", textAlign: "center", color: "#6EE7B7", fontSize: "14px" }}>
-          ✓ Aucune alarme active<br /><span style={{ fontSize: "12px", color: "#64748B" }}>Votre installation fonctionne normalement</span>
-        </div>
-      ) : visible.map((a, i) => {
-        const color = ALARM_COLOR[a.lev] || "#94A3B8";
-        const open = expanded === i;
-        return (
-          <div key={i} onClick={() => setExpanded(open ? null : i)}
-            style={{ background: "#1E293B", border: "1px solid #334155", borderLeft: `4px solid ${color}`, borderRadius: "12px", padding: "12px 14px", cursor: "pointer", marginBottom: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <p style={{ fontWeight: 700, fontSize: "14px", flex: 1, paddingRight: "8px" }}>{a.alarmName || "Alarme"}</p>
-              <span style={{ background: color + "22", color, border: `1px solid ${color}44`, borderRadius: "999px", padding: "2px 8px", fontSize: "10px", fontWeight: 700, flexShrink: 0 }}>{ALARM_LABEL[a.lev]}</span>
-            </div>
-            <p style={{ color: "#64748B", fontSize: "12px", marginTop: "4px" }}>
-              {a.devName || "--"} · {a.raiseTime ? new Date(a.raiseTime).toLocaleString("fr-FR") : ""}
-            </p>
-            {open && (
-              <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #334155", display: "flex", flexDirection: "column", gap: "6px" }}>
-                {a.alarmCause && <p style={{ fontSize: "13px", color: "#CBD5E1" }}><b>Cause:</b> {a.alarmCause}</p>}
-                {a.alarmSuggest && <p style={{ fontSize: "13px", color: "#CBD5E1" }}><b>Suggestion:</b> {a.alarmSuggest}</p>}
-              </div>
-            )}
+        {loading ? (
+          <div style={{ textAlign: "center", color: "#94A3B8", padding: "3rem" }}>Chargement...</div>
+        ) : visible.length === 0 ? (
+          <div style={{ ...card, textAlign: "center", padding: "2.5rem", color: "#16A34A" }}>
+            <p style={{ fontSize: "1.1rem", fontWeight: "600" }}>✓ Aucune alarme active</p>
+            <p style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>Votre installation fonctionne normalement</p>
           </div>
-        );
-      })}
+        ) : visible.map((a, i) => {
+          const sev  = ALARM_SEV[a.lev] || { bg: "#F8FAFC", text: "#6B7280", border: "#E2E8F0" };
+          const open = expanded === i;
+          const dateStr = a.raiseTime ? new Date(a.raiseTime).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "--";
+          const alarmIcon = a.lev === 1 ? "⚠️" : a.lev === 2 ? "🔥" : a.lev === 4 ? "📡" : "⚡";
+
+          return (
+            <div key={i} onClick={() => setExpanded(open ? null : i)} style={{
+              ...card, marginBottom: "8px", cursor: "pointer", borderLeft: `4px solid ${sev.text}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                <div style={{ width: "42px", height: "42px", background: sev.bg, border: `1px solid ${sev.border}`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                  {alarmIcon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <p style={{ fontWeight: "600", fontSize: "15px", color: "#1A202C" }}>{a.alarmName || "Alarme"}</p>
+                      <p style={{ fontSize: "12px", color: "#6B7280", marginTop: "2px" }}>Date: {dateStr}</p>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, marginLeft: "12px" }}>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: "12px", color: "#6B7280" }}>Date: {dateStr}</p>
+                        <p style={{ fontSize: "12px", color: "#6B7280" }}>Device: {a.devName || "--"}</p>
+                      </div>
+                      <span style={{ background: sev.bg, color: sev.text, border: `1px solid ${sev.border}`, borderRadius: "6px", padding: "2px 10px", fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap" }}>
+                        {ALARM_LABEL[a.lev] || "—"}
+                      </span>
+                      <span style={{ color: "#94A3B8", fontSize: "16px" }}>{open ? "∧" : "∨"}</span>
+                    </div>
+                  </div>
+                  {open && (
+                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #F1F5F9" }}>
+                      {a.alarmCause    && <p style={{ fontSize: "13px", color: "#374151", marginBottom: "4px" }}><strong>Cause:</strong> {a.alarmCause}</p>}
+                      {a.alarmSuggest  && <p style={{ fontSize: "13px", color: "#374151" }}><strong>Action Suggérée:</strong> {a.alarmSuggest}</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-// ─── Réglages Tab ─────────────────────────────────────────────────────────────
-function ReglagesTab({ kpi, lastSync }) {
+// ── Réglages Tab ──────────────────────────────────────────────────────────────
+function ReglagesTab({ kpi, lastSync, stationName }) {
   const { user } = useAuth();
   const [settings, upd] = useSettings();
-  const data = kpi?.data?.[0]?.dataItemMap || {};
-
-  const installName = settings.installName || "Mon installation";
-  const location    = settings.location || "Maroc";
-  const threshold   = settings.soilingThreshold ?? 85;
-  const capacity    = data.installed_capacity ?? settings.capacity ?? "--";
-  const syncAgo     = lastSync ? Math.round((Date.now() - lastSync) / 60000) : null;
+  const d = kpi?.data?.[0]?.dataItemMap || {};
+  const capacity  = d.installed_capacity ?? settings.capacity ?? "--";
+  const threshold = settings.soilingThreshold ?? 85;
+  const syncAgo   = lastSync ? Math.round((Date.now() - lastSync) / 60000) : null;
 
   return (
-    <div style={s.tab}>
-      <div style={s.header}>
-        <p style={s.pageTitle}>Paramètres</p>
-      </div>
+    <div>
+      <PageHeader title="Réglages" stationName={stationName} />
+      <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
 
-      {/* Profile */}
-      <div style={{ ...s.section, display: "flex", alignItems: "center", gap: "14px", padding: "1.25rem" }}>
-        <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#F59E0B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", flexShrink: 0 }}>
-          👤
-        </div>
-        <div>
-          <p style={{ fontWeight: 700, fontSize: "16px" }}>{user?.full_name || "Client"}</p>
-          <p style={{ color: "#64748B", fontSize: "13px" }}>{location}</p>
-          {capacity !== "--" && (
-            <span style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", color: "#F59E0B", borderRadius: "999px", padding: "2px 10px", fontSize: "11px", fontWeight: 600, marginTop: "4px", display: "inline-block" }}>
-              {capacity} kWc
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Installation */}
-      <SectionTitle>Installation</SectionTitle>
-      <div style={s.section}>
-        <SettingRow icon="🏭" label="Nom de l'installation">
-          <input value={installName} onChange={e => upd("installName", e.target.value)}
-            style={{ background: "transparent", border: "none", color: "#F1F5F9", fontSize: "13px", textAlign: "right", outline: "none", width: "140px" }} />
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="📍" label="Localisation">
-          <input value={location} onChange={e => upd("location", e.target.value)}
-            style={{ background: "transparent", border: "none", color: "#F1F5F9", fontSize: "13px", textAlign: "right", outline: "none", width: "120px" }} />
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="⚡" label="Puissance crête">
-          <span style={{ color: "#94A3B8", fontSize: "13px" }}>{capacity} kWc</span>
-        </SettingRow>
-      </div>
-
-      {/* Soiling threshold */}
-      <SectionTitle>Seuil d'alerte soiling</SectionTitle>
-      <div style={{ ...s.section, padding: "1rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <div>
-            <p style={{ fontSize: "13px", fontWeight: 600 }}>Déclencher alerte si Soiling</p>
-            <p style={{ fontSize: "11px", color: "#64748B" }}>En dessous de ce seuil → email automatique</p>
+        {/* Profil */}
+        <div style={card}>
+          <p style={sectionTitle}>Profil</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
+            <div><p style={fieldLbl}>Nom Complet</p><p style={fieldVal}>{user?.full_name || "Client"}</p></div>
+            <div><p style={fieldLbl}>Ville</p><p style={fieldVal}>{settings.location || "Maroc"}</p></div>
+            <div><p style={fieldLbl}>Capacité installée</p><p style={fieldVal}>{capacity !== "--" ? `${capacity} kWc` : "--"}</p></div>
           </div>
-          <span style={{ fontSize: "1.4rem", fontWeight: "800", color: "#F59E0B" }}>{threshold}%</span>
         </div>
-        <input type="range" min="60" max="99" value={threshold}
-          onChange={e => upd("soilingThreshold", +e.target.value)}
-          style={{ width: "100%", accentColor: "#F59E0B", height: "6px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
-          <span style={{ fontSize: "10px", color: "#EF4444" }}>60% · Critique</span>
-          <span style={{ fontSize: "10px", color: "#F59E0B" }}>85% · Recommandé</span>
-          <span style={{ fontSize: "10px", color: "#10B981" }}>99% · Strict</span>
+
+        {/* Installation */}
+        <div style={card}>
+          <p style={sectionTitle}>Détails de l'installation</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
+            <div>
+              <p style={fieldLbl}>Nom de l'installation</p>
+              <input style={inputSty} value={settings.installName || "Mon installation"} onChange={e => upd("installName", e.target.value)} />
+            </div>
+            <div>
+              <p style={fieldLbl}>Emplacement</p>
+              <input style={inputSty} value={settings.location || "Maroc"} onChange={e => upd("location", e.target.value)} />
+            </div>
+            <div>
+              <p style={fieldLbl}>Puissance Crête</p>
+              <p style={{ ...fieldVal, color: "#6B7280" }}>{capacity !== "--" ? `${capacity} kWc` : "--"}</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Notifications */}
-      <SectionTitle>Notifications</SectionTitle>
-      <div style={s.section}>
-        <SettingRow icon="🔔" label="Alertes soiling" sub="Notification quand indice < seuil">
-          <Toggle value={settings.notifSoiling ?? true} onChange={v => upd("notifSoiling", v)} />
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="✉️" label="Email automatique" sub="Rapport d'alerte par email">
-          <Toggle value={settings.notifEmail ?? true} onChange={v => upd("notifEmail", v)} />
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="💬" label="SMS d'urgence" sub="SMS pour alertes critiques seulement">
-          <Toggle value={settings.notifSMS ?? false} onChange={v => upd("notifSMS", v)} />
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="📊" label="Rapport mensuel" sub="Bilan mensuel de votre installation">
-          <Toggle value={settings.notifMonthly ?? true} onChange={v => upd("notifMonthly", v)} />
-        </SettingRow>
-      </div>
-
-      {/* FusionSolar connection */}
-      <SectionTitle>Connexion Huawei FusionSolar</SectionTitle>
-      <div style={s.section}>
-        <SettingRow icon="🔗" label="Statut API">
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
-            <span style={{ fontSize: "12px", color: "#10B981" }}>Connecté</span>
-            {syncAgo != null && <span style={{ fontSize: "11px", color: "#64748B" }}>· sync il y a {syncAgo} min</span>}
+        {/* Soiling threshold */}
+        <div style={card}>
+          <p style={sectionTitle}>AI Seuil d'Alerte d'Encrassement</p>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" }}>
+            <span style={{ color: "#DC2626" }}>Alerte Critique (60%)</span>
+            <span style={{ color: "#D97706" }}>Recommandation (85%)</span>
+            <span style={{ color: "#16A34A" }}>Optimal (99%)</span>
           </div>
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="🔑" label="Identifiants API">
-          <span style={{ fontSize: "12px", color: "#64748B", letterSpacing: "3px" }}>••••••••••</span>
-        </SettingRow>
-      </div>
-
-      {/* Preferences */}
-      <SectionTitle>Préférences</SectionTitle>
-      <div style={s.section}>
-        <SettingRow icon="🌙" label="Mode sombre">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ ...s.pill, background: "#F59E0B22", color: "#F59E0B", border: "1px solid #F59E0B55" }}>ACTIVE</span>
-            <Toggle value={true} onChange={() => {}} />
+          <input type="range" min="60" max="99" value={threshold} onChange={e => upd("soilingThreshold", +e.target.value)} style={{ width: "100%" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#94A3B8", marginTop: "4px" }}>
+            <span>60%</span>
+            <span style={{ fontWeight: "600", color: "#374151" }}>{threshold}%</span>
+            <span>100%</span>
           </div>
-        </SettingRow>
-        <Divider />
-        <SettingRow icon="🌐" label="Langue">
-          <div style={{ display: "flex", gap: "6px" }}>
-            {["FR", "AR", "EN"].map(lang => (
-              <button key={lang} onClick={() => upd("language", lang)}
-                style={{ ...s.langBtn, ...(( settings.language || "FR") === lang ? s.langActive : {}) }}>
-                {lang}
-              </button>
+          <p style={{ fontSize: "12px", color: "#6B7280", marginTop: "8px" }}>
+            Définir le pourcentage de propreté en dessous duquel recevoir une alerte par e-mail.
+          </p>
+        </div>
+
+        {/* Notifications */}
+        <div style={card}>
+          <p style={sectionTitle}>Préférences de Notification</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+            {[
+              ["soilingAlerts",  "Alertes d'encrassement"],
+              ["emailReports",   "Rapports d'email automatiques"],
+              ["smsUrgency",     "SMS d'urgence (pour alarmes critiques)"],
+              ["monthlyReport",  "Rapport de synthèse mensuel"],
+            ].map(([key, label]) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Toggle value={settings[key] !== false} onChange={v => upd(key, v)} />
+                <span style={{ fontSize: "13px", color: "#374151" }}>{label}</span>
+              </div>
             ))}
           </div>
-        </SettingRow>
-      </div>
-
-      {/* Footer */}
-      <div style={{ textAlign: "center", padding: "1.5rem 0 0.5rem", color: "#334155", fontSize: "12px" }}>
-        <p style={{ fontWeight: 600 }}>Solar AI-OPTIMIZER v1.0.0</p>
-        <p>{location}, {new Date().getFullYear()}</p>
-      </div>
-    </div>
-  );
-}
-
-function SectionTitle({ children }) {
-  return <p style={{ fontSize: "11px", fontWeight: "700", letterSpacing: "0.1em", color: "#64748B", textTransform: "uppercase", padding: "0.25rem 0" }}>{children}</p>;
-}
-function Divider() {
-  return <div style={{ height: "1px", background: "#1E3A5F", margin: "0 0.5rem" }} />;
-}
-function SettingRow({ icon, label, sub, children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", gap: "8px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
-        <span style={{ fontSize: "1.1rem" }}>{icon}</span>
-        <div>
-          <p style={{ fontSize: "13px", fontWeight: 500 }}>{label}</p>
-          {sub && <p style={{ fontSize: "11px", color: "#64748B" }}>{sub}</p>}
         </div>
+
+        {/* FusionSolar + App Prefs */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={card}>
+            <p style={sectionTitle}>Connexion API FusionSolar</p>
+            <p style={{ fontSize: "13px", marginBottom: "4px" }}>Statut: <span style={{ color: "#16A34A", fontWeight: "600" }}>Connecté</span></p>
+            <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "4px" }}>
+              Dernière synchro: {syncAgo != null ? `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}` : "—"}
+            </p>
+            <p style={{ fontSize: "13px", color: "#6B7280" }}>Crédentiels: <span style={{ fontFamily: "monospace" }}>••••••••</span></p>
+          </div>
+          <div style={card}>
+            <p style={sectionTitle}>App Préférences</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.875rem" }}>
+              <Toggle value={settings.darkMode || false} onChange={v => upd("darkMode", v)} />
+              <span style={{ fontSize: "13px" }}>Mode Sombre</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "13px" }}>Language</span>
+              <select value={settings.language || "fr"} onChange={e => upd("language", e.target.value)}
+                style={{ padding: "4px 8px", border: "1px solid #E2E8F0", borderRadius: "6px", fontSize: "13px", flex: 1 }}>
+                <option value="fr">Français / Arabe / Anglais</option>
+                <option value="ar">Arabe</option>
+                <option value="en">Anglais</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
       </div>
-      {children}
     </div>
   );
 }
-
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
-export default function ClientDashboard() {
-  const { logout } = useAuth();
-  const [tab, setTab]           = useState("accueil");
-  const [kpi, setKpi]           = useState(null);
-  const [deviceKpi, setDevKpi]  = useState(null);
-  const [soiling, setSoiling]   = useState(null);
-  const [stations, setStations] = useState([]);
-  const [alarmCount, setAlarmCount] = useState(0);
-  const [lastSync, setLastSync] = useState(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [stRes, kpiRes] = await Promise.all([
-          api.get("/client/stations"),
-          api.get("/client/kpi/realtime"),
-        ]);
-        setStations(stRes.data);
-        setKpi(kpiRes.data);
-        setLastSync(Date.now());
-        if (stRes.data.length > 0) {
-          const soil = await api.get(`/soiling/station/${stRes.data[0].station_code}`);
-          setSoiling(soil.data);
-        }
-        try {
-          const devRes = await api.get("/client/kpi/devices");
-          setDevKpi(devRes.data?.[0]?.data?.[0]?.dataItemMap || null);
-        } catch {}
-        try {
-          const alarmRes = await api.get("/client/alarms");
-          setAlarmCount((alarmRes.data || []).reduce((n, r) => n + (r?.data?.length || 0), 0));
-        } catch {}
-      } catch (err) { console.error(err); }
-    }
-    load();
-    const iv = setInterval(load, 10 * 60 * 1000);
-    return () => clearInterval(iv);
-  }, []);
-
-  const stationCodes = stations.map(s => s.station_code);
-
-  return (
-    <div style={s.page}>
-      <button onClick={logout} style={s.logoutBtn} title="Déconnexion">⏻</button>
-
-      {tab === "accueil"  && <AccueilTab kpi={kpi} deviceKpi={deviceKpi} soiling={soiling} stations={stations} alarmCount={alarmCount} onAlertes={() => setTab("alertes")} />}
-      {tab === "analyses" && <AnalysesTab stationCodes={stationCodes} kpi={kpi} deviceKpi={deviceKpi} />}
-      {tab === "alertes"  && <AlertesTab />}
-      {tab === "reglages" && <ReglagesTab kpi={kpi} lastSync={lastSync} />}
-
-      <div style={{ height: "72px" }} />
-      <BottomNav active={tab} onChange={setTab} alarmCount={alarmCount} />
-    </div>
-  );
-}
-
-const s = {
-  page: { minHeight: "100vh", background: "#0F172A", color: "#F1F5F9", fontFamily: "system-ui, sans-serif", position: "relative" },
-  logoutBtn: { position: "fixed", top: "12px", right: "12px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", color: "#FCA5A5", borderRadius: "8px", padding: "6px 10px", fontSize: "15px", zIndex: 200 },
-  tab: { padding: "1rem 1rem 0", display: "flex", flexDirection: "column", gap: "1rem" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingTop: "4px" },
-  brand: { fontSize: "10px", fontWeight: "700", letterSpacing: "0.12em", color: "#64748B", textTransform: "uppercase" },
-  pageTitle: { fontWeight: "800", fontSize: "1.1rem", color: "#F1F5F9", marginTop: "2px" },
-  clock: { fontSize: "1.4rem", fontWeight: "800", color: "#F59E0B" },
-  live: { display: "flex", alignItems: "center", gap: "5px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "999px", padding: "3px 9px", fontSize: "10px", color: "#10B981", fontWeight: "700" },
-  liveDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#10B981", display: "inline-block" },
-  banner: { border: "1px solid", borderRadius: "12px", padding: "12px 16px", display: "flex", flexDirection: "column", gap: "3px" },
-  fluxCard: { background: "#1E293B", border: "1px solid #334155", borderRadius: "16px", padding: "1.25rem" },
-  fluxTitle: { fontSize: "10px", fontWeight: "700", letterSpacing: "0.1em", color: "#64748B", textTransform: "uppercase", marginBottom: "0.5rem" },
-  flow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.75rem" },
-  flowNode: { display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", flex: 1 },
-  flowIcon: { width: "44px", height: "44px", borderRadius: "50%", border: "2px solid", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", background: "#0F172A" },
-  flowLabel: { fontSize: "9px", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" },
-  flowVal: { fontSize: "12px", fontWeight: "700", textAlign: "center" },
-  flowLine: { display: "flex", gap: "3px", alignItems: "center", marginBottom: "20px" },
-  flowDot: { width: "4px", height: "4px", borderRadius: "50%", background: "#334155" },
-  kpiGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" },
-  alarmChip: { padding: "12px", borderRadius: "12px", border: "1px solid #334155", background: "#1E293B", color: "#64748B", fontSize: "13px", fontWeight: "500", cursor: "pointer", textAlign: "center" },
-  alarmActive: { background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#FCA5A5" },
-  toggleRow: { display: "flex", gap: "6px", background: "#1E293B", border: "1px solid #334155", borderRadius: "12px", padding: "4px" },
-  toggleBtn: { flex: 1, padding: "7px 4px", background: "none", border: "none", color: "#64748B", borderRadius: "9px", fontSize: "12px", fontWeight: "500", position: "relative", cursor: "pointer" },
-  toggleActive: { background: "#F59E0B", color: "#0F172A", fontWeight: "700" },
-  activePill: { position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)", background: "#F59E0B", color: "#0F172A", fontSize: "7px", fontWeight: "800", padding: "1px 4px", borderRadius: "4px" },
-  modeRow: { display: "flex", gap: "8px" },
-  modeBtn: { flex: 1, padding: "10px", background: "#1E293B", border: "1px solid #334155", borderRadius: "12px", color: "#64748B", fontSize: "13px", fontWeight: "500", position: "relative", cursor: "pointer" },
-  modeActive: { background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", color: "#F59E0B", fontWeight: "700" },
-  chartWrap: { background: "#1E293B", border: "1px solid #334155", borderRadius: "14px", padding: "1rem" },
-  loading: { height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B" },
-  summaryRow: { display: "flex", gap: "8px" },
-  chip: { flex: 1, background: "#1E293B", border: "1px solid #334155", borderRadius: "12px", padding: "10px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" },
-  chipVal: { fontSize: "1.1rem", fontWeight: "800", color: "#F59E0B" },
-  chipLbl: { fontSize: "9px", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" },
-  section: { background: "#1E293B", border: "1px solid #1E3A5F", borderRadius: "14px", overflow: "hidden" },
-  pill: { fontSize: "9px", fontWeight: "700", padding: "2px 6px", borderRadius: "4px" },
-  langBtn: { padding: "5px 10px", background: "#0F172A", border: "1px solid #334155", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer" },
-  langActive: { background: "rgba(245,158,11,0.15)", border: "1px solid #F59E0B", color: "#F59E0B" },
-};
