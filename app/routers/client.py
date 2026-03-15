@@ -80,6 +80,26 @@ def get_monthly_kpi(
     return results
 
 
+@router.get("/kpi/devices")
+def get_device_kpi(
+    current_user: User = Depends(_require_client),
+    db: Session = Depends(get_db),
+):
+    """Fetch real-time KPI for all inverters — gives temperature, efficiency, etc."""
+    codes = _get_station_codes(current_user, db)
+    results = []
+    for code in codes:
+        try:
+            dev_data = _handle(fs.get_dev_list, code)
+            devices = dev_data.get("data") or []
+            inv_ids = [str(d["id"]) for d in devices if d.get("devTypeId") == 1]
+            if inv_ids:
+                results.append(_handle(fs.get_dev_real_kpi, inv_ids, 1))
+        except Exception:
+            pass
+    return results
+
+
 @router.get("/devices")
 def get_devices(
     current_user: User = Depends(_require_client),

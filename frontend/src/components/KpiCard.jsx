@@ -1,10 +1,11 @@
 export default function KpiCard({ label, value, unit, color = "#F59E0B", icon }) {
+  if (value == null) return null;
   return (
     <div style={s.card}>
       {icon && <div style={s.icon}>{icon}</div>}
       <p style={s.label}>{label}</p>
       <p style={{ ...s.value, color }}>
-        {value ?? "--"} <span style={s.unit}>{unit}</span>
+        {value} <span style={s.unit}>{unit}</span>
       </p>
     </div>
   );

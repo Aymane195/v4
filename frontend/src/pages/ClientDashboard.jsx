@@ -33,7 +33,7 @@ function healthInfo(state) {
 
 // ─── Accueil Tab ─────────────────────────────────────────────────────────────
 
-function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
+function AccueilTab({ kpi, deviceKpi, soiling, stations, alarmCount, onAlertes }) {
   const clock = useClock();
   const data = kpi?.data?.[0]?.dataItemMap || {};
   const power            = data.inverter_power ?? null;
@@ -48,6 +48,8 @@ function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
   const performanceRatio = data.performance_ratio ?? null;
   const healthState      = data.real_health_state ?? null;
   const health           = healthInfo(healthState);
+  const invTemp          = deviceKpi?.temperature ?? null;
+  const invEfficiency    = deviceKpi?.efficiency != null ? +(deviceKpi.efficiency * 100).toFixed(1) : null;
 
   const soilingPct  = soiling?.soiling_index ?? 0;
   const isClean     = soilingPct < 0.05;
@@ -91,6 +93,8 @@ function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
         <KpiCard label="Ce mois" value={monthEnergy} unit="kWh" color="#60A5FA" icon="📆" />
         <KpiCard label="Revenus aujourd'hui" value={dayIncome} unit="DH" color="#10B981" icon="💰" />
         <KpiCard label="Revenus totaux" value={totalIncome} unit="DH" color="#A78BFA" icon="💵" />
+        <KpiCard label="Temp. onduleur" value={invTemp} unit="°C" color="#F97316" icon="🌡️" />
+        <KpiCard label="Efficacité" value={invEfficiency} unit="%" color="#10B981" icon="⚙️" />
         {performanceRatio != null && (
           <KpiCard label="Rendement" value={(performanceRatio * 100).toFixed(1)} unit="%" color="#F59E0B" icon="📈" />
         )}
@@ -336,6 +340,7 @@ export default function ClientDashboard() {
   const { logout } = useAuth();
   const [tab, setTab] = useState("accueil");
   const [kpi, setKpi] = useState(null);
+  const [deviceKpi, setDeviceKpi] = useState(null);
   const [soiling, setSoiling] = useState(null);
   const [stations, setStations] = useState([]);
   const [alarmCount, setAlarmCount] = useState(0);
@@ -353,6 +358,12 @@ export default function ClientDashboard() {
           const soil = await api.get(`/soiling/station/${stRes.data[0].station_code}`);
           setSoiling(soil.data);
         }
+        // Device-level KPI (inverter temperature, efficiency, etc.)
+        try {
+          const devRes = await api.get("/client/kpi/devices");
+          const devMap = devRes.data?.[0]?.data?.[0]?.dataItemMap || null;
+          setDeviceKpi(devMap);
+        } catch {}
         // Count active alarms quietly
         try {
           const alarmRes = await api.get("/client/alarms");
@@ -375,7 +386,7 @@ export default function ClientDashboard() {
       <button onClick={logout} style={s.logoutBtn} title="Déconnexion">⏻</button>
 
       {tab === "accueil" && (
-        <AccueilTab kpi={kpi} soiling={soiling} stations={stations} alarmCount={alarmCount} onAlertes={() => setTab("alertes")} />
+        <AccueilTab kpi={kpi} deviceKpi={deviceKpi} soiling={soiling} stations={stations} alarmCount={alarmCount} onAlertes={() => setTab("alertes")} />
       )}
       {tab === "analyses" && <AnalysesTab stationCodes={stationCodes} kpi={kpi} />}
       {tab === "alertes" && <AlertesTab />}
