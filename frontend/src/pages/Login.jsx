@@ -17,54 +17,47 @@ export default function Login() {
       const user = await login(form.email, form.password);
       navigate(user.role === "client" ? "/client" : "/employee");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(err.response?.data?.detail || err.message || "Identifiants incorrects");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Solar AI Monitor</h2>
-        <p style={styles.subtitle}>Sign in to your account</p>
-        {error && <p style={styles.error}>{error}</p>}
+    <div style={s.page}>
+      <div style={s.card}>
+        <div style={s.logo}>☀️</div>
+        <h1 style={s.title}>Solar AI Monitor</h1>
+        <p style={s.sub}>Connectez-vous à votre compte</p>
+        {error && <div style={s.error}>{error}</div>}
         <form onSubmit={handleSubmit}>
-          <input
-            style={styles.input}
-            type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            required
-          />
-          <input
-            style={styles.input}
-            type="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required
-          />
-          <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+          <label style={s.label}>Adresse email</label>
+          <input style={s.input} type="email" placeholder="vous@exemple.com"
+            value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+          <label style={s.label}>Mot de passe</label>
+          <input style={s.input} type="password" placeholder="••••••••"
+            value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+          <button style={s.btn} type="submit" disabled={loading}>
+            {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
-        <p style={styles.link}>
-          No account? <Link to="/register">Register here</Link>
+        <p style={s.foot}>
+          Pas de compte ? <Link to="/register">Créer un compte</Link>
         </p>
       </div>
     </div>
   );
 }
 
-const styles = {
-  container: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8" },
-  card: { background: "#fff", padding: "2.5rem", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", width: "100%", maxWidth: "400px" },
-  title: { margin: "0 0 0.25rem", fontSize: "1.6rem", color: "#1a202c" },
-  subtitle: { margin: "0 0 1.5rem", color: "#718096" },
-  input: { display: "block", width: "100%", padding: "0.75rem", marginBottom: "1rem", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "1rem", boxSizing: "border-box" },
-  button: { width: "100%", padding: "0.75rem", background: "#f6ad55", border: "none", borderRadius: "8px", fontSize: "1rem", fontWeight: "600", cursor: "pointer", color: "#1a202c" },
-  error: { background: "#fed7d7", color: "#c53030", padding: "0.75rem", borderRadius: "8px", marginBottom: "1rem" },
-  link: { textAlign: "center", marginTop: "1rem", color: "#718096" },
+const s = {
+  page: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0F172A", padding: "1rem" },
+  card: { background: "#1E293B", border: "1px solid #334155", borderRadius: "16px", padding: "2.5rem 2rem", width: "100%", maxWidth: "400px" },
+  logo: { fontSize: "2.5rem", textAlign: "center", marginBottom: "0.5rem" },
+  title: { textAlign: "center", fontSize: "1.5rem", fontWeight: "700", color: "#F1F5F9", marginBottom: "0.25rem" },
+  sub: { textAlign: "center", color: "#94A3B8", fontSize: "0.9rem", marginBottom: "1.75rem" },
+  label: { display: "block", fontSize: "13px", color: "#94A3B8", marginBottom: "6px", marginTop: "1rem" },
+  input: { display: "block", width: "100%", padding: "0.7rem 0.875rem", background: "#0F172A", border: "1px solid #334155", borderRadius: "8px", color: "#F1F5F9", fontSize: "0.95rem", outline: "none" },
+  btn: { marginTop: "1.5rem", width: "100%", padding: "0.75rem", background: "#F59E0B", border: "none", borderRadius: "8px", color: "#0F172A", fontSize: "1rem", fontWeight: "700" },
+  error: { background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#FCA5A5", padding: "0.75rem", borderRadius: "8px", fontSize: "0.875rem", marginBottom: "0.5rem" },
+  foot: { textAlign: "center", marginTop: "1.25rem", color: "#94A3B8", fontSize: "0.875rem" },
 };
