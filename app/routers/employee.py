@@ -100,6 +100,27 @@ def list_all_stations(
     ]
 
 
+@router.get("/alarms")
+def get_all_alarms(
+    current_user: User = Depends(_require_employee),
+    db: Session = Depends(get_db),
+):
+    """Aggregated alarms from all managed stations, sorted by severity then time."""
+    stations = db.query(ClientStation).all()
+    results = []
+    for s in stations:
+        try:
+            data = fs.get_alarm_list(s.station_code)
+            for a in (data.get("data") or []):
+                a["station_code"] = s.station_code
+                a["station_name"] = s.station_name or s.station_code
+            results.extend(data.get("data") or [])
+        except Exception:
+            pass
+    results.sort(key=lambda x: ((x.get("lev") or 9), -(x.get("raiseTime") or 0)))
+    return results
+
+
 @router.get("/stations/{station_code}/kpi/realtime")
 def get_station_realtime(
     station_code: str,

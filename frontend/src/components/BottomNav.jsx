@@ -2,6 +2,7 @@ export default function BottomNav({ active, onChange }) {
   const tabs = [
     { id: "accueil", label: "Accueil", icon: "⚡" },
     { id: "analyses", label: "Analyses", icon: "📊" },
+    { id: "alertes", label: "Alertes", icon: "🔔" },
   ];
 
   return (
