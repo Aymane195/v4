@@ -56,6 +56,25 @@ function AccueilTab({ kpi, deviceKpi, soiling, stations, alarmCount, onAlertes }
   const isClean    = soilingPct < 0.05;
   const stationName = stations[0]?.station_name || stations[0]?.station_code || "Mon installation";
 
+  const [livePower, setLivePower] = useState(power);
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function tick() {
+      try {
+        const res = await api.get("/client/kpi/realtime");
+        if (cancelled) return;
+        const p = res.data?.data?.[0]?.dataItemMap?.inverter_power ?? null;
+        setLivePower(p);
+        setPulse(true);
+        setTimeout(() => { if (!cancelled) setPulse(false); }, 500);
+      } catch {}
+    }
+    tick();
+    const iv = setInterval(tick, 3000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
   return (
     <div style={s.tab}>
       {/* Header */}
@@ -76,6 +95,21 @@ function AccueilTab({ kpi, deviceKpi, soiling, stations, alarmCount, onAlertes }
           {isClean ? "Panneaux propres — production optimale" : "⚠ Nettoyage recommandé"}
         </span>
         <span style={{ color: "#64748B", fontSize: "12px" }}>{soiling?.recommendation || "Analyse en cours..."}</span>
+      </div>
+
+      {/* Live production */}
+      <div style={{ background: pulse ? "rgba(245,158,11,0.12)" : "#1E293B", border: `1px solid ${pulse ? "#F59E0B" : "#334155"}`, borderRadius: "14px", padding: "0.875rem 1.25rem", transition: "background 0.4s, border-color 0.4s", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981" }} />
+            <p style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#64748B", fontWeight: "700" }}>Énergie produite en ce moment</p>
+          </div>
+          <p style={{ fontSize: "2rem", fontWeight: "800", color: "#F59E0B", lineHeight: 1.1 }}>
+            {livePower != null ? fmt(livePower, 2) : "--"}
+            <span style={{ fontSize: "0.85rem", fontWeight: "500", color: "#94A3B8", marginLeft: "6px" }}>kW</span>
+          </p>
+        </div>
+        <span style={{ fontSize: "2rem" }}>⚡</span>
       </div>
 
       {/* Flux énergétique card — gauge + flow */}
@@ -265,7 +299,7 @@ function AnalysesTab({ stationCodes, kpi, deviceKpi }) {
         <DetailCard icon="🏛️" label="Économies totales" value={totalSavings != null ? fmt(totalSavings) : null} unit="DH" sub="depuis installation" color="#10B981" />
         <DetailCard icon="🌍" label="CO₂ évité au total" value={co2Total != null ? fmt(co2Total) : null} unit="kg" sub={trees != null ? `≈ ${fmt(trees)} arbres plantés` : null} color="#A78BFA" />
         <DetailCard icon="🌡️" label="Température panneaux" value={panelTemp != null ? fmt(panelTemp, 1) : null} unit="°C" sub="surface capteurs" color="#F97316" />
-        <DetailCard icon="☀️" label="Irradiance solaire" value={radiation != null ? fmt(radiation, 0) : null} unit="W/m²" sub="rayonnement actuel" color="#60A5FA" />
+        <DetailCard icon="☀️" label="Irradiance solaire" value={fmt(radiation, 0)} unit="W/m²" sub="rayonnement actuel" color="#60A5FA" />
         <DetailCard icon="↗️" label="Injection réseau" value={gridInjection != null ? fmt(gridInjection, 2) : null} unit="kW" sub="surplus envoyé" color="#F59E0B" />
       </div>
     </div>
@@ -273,7 +307,7 @@ function AnalysesTab({ stationCodes, kpi, deviceKpi }) {
 }
 
 function DetailCard({ icon, label, value, unit, sub, color }) {
-  if (!value) return null;
+  if (value == null) return null;
   return (
     <div style={{ background: "#1E293B", border: "1px solid #1E3A5F", borderRadius: "14px", padding: "1rem", display: "flex", flexDirection: "column", gap: "4px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
