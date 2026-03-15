@@ -36,16 +36,18 @@ function healthInfo(state) {
 function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
   const clock = useClock();
   const data = kpi?.data?.[0]?.dataItemMap || {};
-  const power           = data.inverter_power ?? null;
-  const dayEnergy       = data.day_power ?? null;
-  const totalEnergy     = data.total_power ?? null;
-  const co2             = data.reduce_carbon ?? null;
-  const gridPower       = data.use_power ?? null;
-  const dayIncome       = data.day_income ?? null;
-  const totalIncome     = data.total_income ?? null;
+  const power            = data.inverter_power ?? null;
+  const dayEnergy        = data.day_power ?? null;
+  const totalEnergy      = data.total_power ?? null;
+  const monthEnergy      = data.month_power ?? null;
+  const homeEnergy       = data.day_use_energy ?? null;          // actual home consumption today
+  const gridPower        = data.use_power ?? data.day_on_grid_energy ?? null;
+  const co2              = data.reduce_carbon ?? (totalEnergy != null ? +(totalEnergy * 0.233).toFixed(1) : null);
+  const dayIncome        = data.day_income ?? null;
+  const totalIncome      = data.total_income ?? null;
   const performanceRatio = data.performance_ratio ?? null;
-  const healthState     = data.real_health_state ?? null;
-  const health          = healthInfo(healthState);
+  const healthState      = data.real_health_state ?? null;
+  const health           = healthInfo(healthState);
 
   const soilingPct  = soiling?.soiling_index ?? 0;
   const isClean     = soilingPct < 0.05;
@@ -78,7 +80,7 @@ function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
       </div>
 
       {/* Energy flow */}
-      <EnergyFlowCard power={power} dayPower={dayEnergy} gridPower={gridPower} />
+      <EnergyFlowCard power={power} homeEnergy={homeEnergy} gridPower={gridPower} />
 
       {/* KPI cards */}
       <div style={s.kpiGrid}>
@@ -86,6 +88,7 @@ function AccueilTab({ kpi, soiling, stations, alarmCount, onAlertes }) {
         <KpiCard label="Aujourd'hui" value={dayEnergy} unit="kWh" color="#10B981" icon="📅" />
         <KpiCard label="Total produit" value={totalEnergy} unit="kWh" color="#60A5FA" icon="🔋" />
         <KpiCard label="CO₂ évité" value={co2} unit="kg" color="#A78BFA" icon="🌿" />
+        <KpiCard label="Ce mois" value={monthEnergy} unit="kWh" color="#60A5FA" icon="📆" />
         <KpiCard label="Revenus aujourd'hui" value={dayIncome} unit="DH" color="#10B981" icon="💰" />
         <KpiCard label="Revenus totaux" value={totalIncome} unit="DH" color="#A78BFA" icon="💵" />
         {performanceRatio != null && (

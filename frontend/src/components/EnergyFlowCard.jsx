@@ -12,7 +12,7 @@ function Arrow() {
   return <div style={s.arrow}>→</div>;
 }
 
-export default function EnergyFlowCard({ power, dayPower, gridPower }) {
+export default function EnergyFlowCard({ power, homeEnergy, gridPower }) {
   return (
     <div style={s.card}>
       <p style={s.title}>Flux Énergétique</p>
@@ -21,7 +21,7 @@ export default function EnergyFlowCard({ power, dayPower, gridPower }) {
         <Arrow />
         <Node label="Onduleur" value={power} unit="kW" icon="⚡" color="#60A5FA" />
         <Arrow />
-        <Node label="Domicile" value={dayPower} unit="kWh" icon="🏠" color="#10B981" />
+        <Node label="Domicile" value={homeEnergy} unit="kWh" icon="🏠" color="#10B981" />
         <Arrow />
         <Node label="Réseau" value={gridPower} unit="kW" icon="🔌" color="#A78BFA" />
       </div>
