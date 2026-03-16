@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.models import Base
-from app.routers import fusionsolar, auth, client, employee, soiling
+from app.routers import fusionsolar, auth, client, employee, soiling, interventions
 
 # Create all DB tables on startup
 Base.metadata.create_all(bind=engine)
@@ -29,6 +29,7 @@ app.include_router(auth.router)
 app.include_router(client.router)
 app.include_router(employee.router)
 app.include_router(soiling.router)
+app.include_router(interventions.router)
 app.include_router(fusionsolar.router)
 
 

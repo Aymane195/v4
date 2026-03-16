@@ -132,3 +132,51 @@ def get_alarms(
             raise HTTPException(status_code=400, detail=f"Invalid date: {d}")
 
     return [_handle(fs.get_alarm_list, code, _parse(begin_date), _parse(end_date)) for code in codes]
+
+
+@router.get("/soiling-alerts")
+def get_soiling_alerts(
+    current_user: User = Depends(_require_client),
+    db: Session = Depends(get_db),
+):
+    from app.services import soiling as soiling_service
+    codes = _get_station_codes(current_user, db)
+    if any(demo_svc.is_demo(c) for c in codes):
+        return demo_svc.demo_soiling_alerts()
+
+    # Real clients: return current soiling reading as a single alert (if soiling detected)
+    alerts = []
+    for code in codes:
+        try:
+            kpi_data = fs.get_station_real_kpi([code])
+            data_list = kpi_data.get("data", [])
+            kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
+            features = {
+                "radiation_intensity": kpi.get("radiation_intensity"),
+                "inverter_power":      kpi.get("inverter_power"),
+                "installed_capacity":  kpi.get("installed_capacity"),
+                "temperature":         kpi.get("temperature"),
+            }
+            result = soiling_service.predict_soiling(features)
+            if result["soiling_index"] < 0.02:
+                continue  # Clean — no alert needed
+            sev_map   = {"clean": "info", "light_soiling": "info", "moderate_soiling": "attention", "heavy_soiling": "critique"}
+            title_map = {"info": "Légère accumulation de poussière détectée", "attention": "Encrassement modéré détecté", "critique": "Encrassement critique détecté — Soiling Index élevé"}
+            severity  = sev_map.get(result["status"], "info")
+            alerts.append({
+                "id": f"SA-{code[:8]}",
+                "severity": severity,
+                "status": "en_cours",
+                "title": title_map.get(severity, "Alerte encrassement"),
+                "soiling_index": result["soiling_index"],
+                "energy_loss_percent": result["energy_loss_percent"],
+                "daily_loss_dh": round(result["energy_loss_percent"] * 0.15 * 50, 1),
+                "recommendation": result["recommendation"],
+                "created_at": datetime.datetime.utcnow().isoformat(),
+                "resolved_at": None,
+                "station_code": code,
+                "station_name": code,
+            })
+        except Exception:
+            pass
+    return alerts

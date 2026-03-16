@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { BarChart3, Eye, EyeOff, Sun } from "lucide-react";
+import Logo from "../components/Logo";
 
 export default function Login() {
   const { login, register } = useAuth();
@@ -58,10 +60,7 @@ export default function Login() {
 
         {/* ── Left panel (unchanged) ── */}
         <div className="login-left">
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "40px", height: "40px", background: "#F59E0B", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>☀️</div>
-            <span style={{ color: "#fff", fontWeight: "700", fontSize: "1.1rem" }}>SolarAI Monitor</span>
-          </div>
+          <Logo size="md" color="#F59E0B" />
 
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <h1 style={{ color: "#fff", fontSize: "2.6rem", fontWeight: "800", lineHeight: 1.15, marginBottom: "1.25rem" }}>
@@ -74,17 +73,17 @@ export default function Login() {
 
           <div style={{ display: "flex", alignItems: "center", marginBottom: "2.5rem" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "64px", height: "64px", borderRadius: "50%", border: "2px solid #F59E0B", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(245,158,11,0.1)", fontSize: "1.6rem" }}>☀️</div>
+              <div style={{ width: "64px", height: "64px", borderRadius: "50%", border: "2px solid #F59E0B", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(245,158,11,0.1)", }}><Sun size={26} color="#F59E0B" /></div>
               <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px" }}>Real-time</span>
             </div>
             <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.2)", margin: "0 16px", marginBottom: "20px" }} />
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "64px", height: "64px", borderRadius: "50%", border: "2px solid #60A5FA", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(96,165,250,0.1)", fontSize: "1.6rem" }}>📊</div>
+              <div style={{ width: "64px", height: "64px", borderRadius: "50%", border: "2px solid #60A5FA", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(96,165,250,0.1)", }}><BarChart3 size={26} color="#60A5FA" /></div>
               <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px" }}>Analytics</span>
             </div>
           </div>
 
-          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "12px" }}>© 2026 SolarAI Monitor. Optimized for Morocco.</p>
+          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "12px" }}>© 2026 SOLAR-AI-OPT. Optimized for Morocco.</p>
         </div>
 
         {/* ── Right panel ── */}
@@ -110,7 +109,7 @@ export default function Login() {
                       type={showPass ? "text" : "password"} placeholder="Enter your password"
                       value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} required />
                     <button type="button" onClick={() => setShowPass(p => !p)} style={s.eyeBtn}>
-                      {showPass ? "🙈" : "👁️"}
+                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
 
@@ -173,7 +172,7 @@ export default function Login() {
                       type={showPass ? "text" : "password"} placeholder="Create a password"
                       value={regForm.password} onChange={e => setRegForm({ ...regForm, password: e.target.value })} required />
                     <button type="button" onClick={() => setShowPass(p => !p)} style={s.eyeBtn}>
-                      {showPass ? "🙈" : "👁️"}
+                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
 

@@ -1,9 +1,11 @@
+import { Zap, BarChart3, Bell, Settings } from "lucide-react";
+
 export default function BottomNav({ active, onChange, alarmCount = 0 }) {
   const tabs = [
-    { id: "accueil",  label: "Accueil",  icon: "⚡" },
-    { id: "analyses", label: "Analyses", icon: "📊" },
-    { id: "alertes",  label: "Alertes",  icon: "🔔", badge: alarmCount },
-    { id: "reglages", label: "Réglages", icon: "⚙️" },
+    { id: "accueil",  label: "Accueil",  icon: <Zap size={20} /> },
+    { id: "analyses", label: "Analyses", icon: <BarChart3 size={20} /> },
+    { id: "alertes",  label: "Alertes",  icon: <Bell size={20} />, badge: alarmCount },
+    { id: "reglages", label: "Réglages", icon: <Settings size={20} /> },
   ];
 
   return (
@@ -28,6 +30,6 @@ const s = {
   nav: { position: "fixed", bottom: 0, left: 0, right: 0, background: "#0F172A", borderTop: "1px solid #1E293B", display: "flex", zIndex: 100 },
   tab: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", padding: "10px 0 14px", background: "none", border: "none", color: "#475569", fontSize: "10px", fontWeight: "500", cursor: "pointer", transition: "color 0.15s" },
   active: { color: "#F59E0B" },
-  tabIcon: { fontSize: "1.25rem" },
+  tabIcon: { fontSize: "1.25rem", display: "flex", alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: "-4px", right: "-8px", background: "#EF4444", color: "white", borderRadius: "999px", fontSize: "9px", fontWeight: "700", padding: "1px 4px", minWidth: "14px", textAlign: "center" },
 };

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
-from app.models import UserRole
+from datetime import datetime, date
+from app.models import UserRole, InterventionType, InterventionPriority, InterventionStatus
 
 
 # --- Auth ---
@@ -68,3 +68,45 @@ class SoilingResponse(BaseModel):
     energy_loss_percent: float
     status: str          # "clean", "light_soiling", "moderate_soiling", "heavy_soiling"
     recommendation: str
+
+
+# --- Interventions ---
+
+class InterventionCreate(BaseModel):
+    station_code: str
+    station_name: Optional[str] = None
+    alarm_name: str
+    alarm_severity: int
+    type: InterventionType
+    description: Optional[str] = None
+    priority: InterventionPriority = InterventionPriority.normale
+
+
+class InterventionUpdate(BaseModel):
+    status: Optional[InterventionStatus] = None
+    scheduled_date: Optional[date] = None
+    employee_notes: Optional[str] = None
+    resolution: Optional[str] = None
+
+
+class InterventionOut(BaseModel):
+    id: int
+    station_code: str
+    station_name: Optional[str]
+    client_id: int
+    client_name: Optional[str] = None
+    alarm_name: str
+    alarm_severity: int
+    type: InterventionType
+    description: Optional[str]
+    priority: InterventionPriority
+    status: InterventionStatus
+    assigned_to: Optional[int]
+    scheduled_date: Optional[date]
+    completed_date: Optional[datetime]
+    employee_notes: Optional[str]
+    resolution: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import SoilingGauge from "../components/SoilingGauge";
+import { Home, BarChart3, Bell, Settings, LogOut, RefreshCw, Sun, Zap, Plug, Coins, Leaf, Thermometer, AlertTriangle, Flame, Radio, CheckCircle, Wrench, Send, Clock, CalendarDays, ChevronDown, ChevronUp, ClipboardList } from "lucide-react";
+import Logo from "../components/Logo";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
@@ -93,15 +95,14 @@ export default function ClientDashboard() {
         api.get("/client/stations"),
         api.get("/client/kpi/realtime"),
         api.get("/client/kpi/devices"),
-        api.get("/client/alarms"),
+        api.get("/client/soiling-alerts"),
       ]);
       if (s.status === "fulfilled") setStations(s.value.data || []);
       if (k.status === "fulfilled") { setKpi(k.value.data); setLastSync(Date.now()); }
-      if (dev.status === "fulfilled") setDeviceKpi(dev.value.data);
+      if (dev.status === "fulfilled") { const raw = dev.value.data; setDeviceKpi(Array.isArray(raw) ? raw[0] : raw); }
       if (al.status === "fulfilled") {
-        const all = [];
-        (al.value.data || []).forEach(r => (r?.data || []).forEach(a => all.push(a)));
-        setAlarmCount(all.length);
+        // Count only active (non-resolved) soiling alerts for the badge
+        setAlarmCount((al.value.data || []).filter(a => a.status !== "resolu").length);
       }
     } catch {}
   }, []);
@@ -114,17 +115,17 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (stations[0]?.station_code) {
-      api.get(`/soiling/${stations[0].station_code}`).then(r => setSoiling(r.data)).catch(() => {});
+      api.get(`/soiling/station/${stations[0].station_code}`).then(r => setSoiling(r.data)).catch(() => {});
     }
   }, [stations]);
 
   const stationName = stations[0]?.station_name || stations[0]?.station_code || "Mon installation";
 
   const NAV = [
-    { id: "accueil",  label: "Accueil",  icon: "🏠" },
-    { id: "analyses", label: "Analyses", icon: "📊" },
-    { id: "alertes",  label: "Alertes",  icon: "🔔", badge: alarmCount },
-    { id: "reglages", label: "Réglages", icon: "⚙️" },
+    { id: "accueil",  label: "Accueil",  icon: <Home size={18} /> },
+    { id: "analyses", label: "Analyses", icon: <BarChart3 size={18} /> },
+    { id: "alertes",  label: "Alertes",  icon: <Bell size={18} />, badge: alarmCount },
+    { id: "reglages", label: "Réglages", icon: <Settings size={18} /> },
   ];
 
   return (
@@ -138,11 +139,7 @@ export default function ClientDashboard() {
         {/* ── Sidebar ── */}
         <aside style={{ width: "220px", minHeight: "100vh", background: "#fff", borderRight: "1px solid #E2E8F0", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
           <div style={{ padding: "1.25rem 1.25rem 0.75rem", borderBottom: "1px solid #F1F5F9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-              <div style={{ width: "32px", height: "32px", background: "#F59E0B", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>☀️</div>
-              <span style={{ fontWeight: "700", fontSize: "0.95rem", color: "#1A202C" }}>SolarAI Monitor</span>
-            </div>
-            <p style={{ fontSize: "11px", color: "#94A3B8", marginLeft: "40px" }}>Optimisez votre énergie solaire</p>
+            <Logo size="sm" color="#1A202C" />
           </div>
 
           <nav style={{ flex: 1, padding: "0.75rem" }}>
@@ -166,7 +163,7 @@ export default function ClientDashboard() {
 
           <div style={{ padding: "0.875rem 1.25rem", borderTop: "1px solid #F1F5F9" }}>
             <button onClick={() => { logout(); navigate("/login"); }} style={{ width: "100%", padding: "0.5rem", background: "none", border: "1px solid #E2E8F0", borderRadius: "6px", color: "#6B7280", fontSize: "13px", cursor: "pointer", marginBottom: "6px" }}>
-              ⏻ Déconnexion
+              <LogOut size={14} style={{ verticalAlign: "middle", marginRight: "4px" }} /> Déconnexion
             </button>
             <p style={{ fontSize: "11px", color: "#A0AEC0", textAlign: "center" }}>Version v2.1.0</p>
             <p style={{ fontSize: "11px", color: "#A0AEC0", textAlign: "center" }}>SolarAI, Casablanca, 2024</p>
@@ -177,7 +174,7 @@ export default function ClientDashboard() {
         <main style={{ flex: 1, minHeight: "100vh", background: "#F0F4F8", overflowY: "auto" }}>
           {tab === "accueil"  && <AccueilTab  kpi={kpi} soiling={soiling} alarmCount={alarmCount} stationName={stationName} onAlertes={() => setTab("alertes")} />}
           {tab === "analyses" && <AnalysesTab kpi={kpi} deviceKpi={deviceKpi} stations={stations} stationName={stationName} />}
-          {tab === "alertes"  && <AlertesTab  stationName={stationName} />}
+          {tab === "alertes"  && <AlertesTab  stationName={stationName} stations={stations} />}
           {tab === "reglages" && <ReglagesTab kpi={kpi} lastSync={lastSync} stationName={stationName} />}
         </main>
       </div>
@@ -237,8 +234,8 @@ function AccueilTab({ kpi, soiling, alarmCount, stationName, onAlertes }) {
           <div style={{ ...card, transition: "border-color 0.4s", borderColor: pulse ? "#6366F1" : "#E2E8F0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <p style={sectionTitle}>Production Actuelle</p>
-              <span style={{ background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", borderRadius: "999px", padding: "2px 10px", fontSize: "12px", fontWeight: "600" }}>
-                ⟳ Live
+              <span style={{ background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", borderRadius: "999px", padding: "2px 10px", fontSize: "12px", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <RefreshCw size={12} /> Live
               </span>
             </div>
             <p style={{ fontSize: "3rem", fontWeight: "800", color: "#6366F1", lineHeight: 1 }}>
@@ -259,28 +256,22 @@ function AccueilTab({ kpi, soiling, alarmCount, stationName, onAlertes }) {
           <BottomKpi label="Production Aujourd'hui" value={`${fmt(dayEnergy, 1)} kWh`} />
           <BottomKpi label="Économies ce Mois"      value={`${fmt(monthSavings, 0)} DH`} />
           <BottomKpi label="CO₂ Évité (Total)"      value={`${fmt(co2Total, 0)} kg`} />
-          <div style={{ ...card, cursor: alarmCount > 0 ? "pointer" : "default" }} onClick={alarmCount > 0 ? onAlertes : undefined}>
-            <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "0.5rem" }}>Résumé des Alarmes</p>
-            {alarmCount === 0 ? (
-              <>
-                <p style={{ fontSize: "13px", fontWeight: "600", color: "#16A34A" }}>Statut: Normal.</p>
-                <p style={{ fontSize: "13px", color: "#16A34A" }}>Aucune alerte active.</p>
-              </>
-            ) : (
-              <p style={{ fontSize: "1.1rem", fontWeight: "700", color: "#EF4444" }}>{alarmCount} alarme{alarmCount > 1 ? "s" : ""} active{alarmCount > 1 ? "s" : ""}</p>
-            )}
-          </div>
+          <BottomKpi
+            label="Perte Encrassement"
+            value={soiling?.energy_loss_percent != null ? `${fmt(soiling.energy_loss_percent, 1)}%` : "--"}
+            color={soiling?.energy_loss_percent > 10 ? "#DC2626" : soiling?.energy_loss_percent > 5 ? "#EA580C" : "#16A34A"}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function BottomKpi({ label, value }) {
+function BottomKpi({ label, value, color = "#1A202C" }) {
   return (
     <div style={card}>
       <p style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500", marginBottom: "0.5rem" }}>{label}</p>
-      <p style={{ fontSize: "1.5rem", fontWeight: "700", color: "#1A202C" }}>{value}</p>
+      <p style={{ fontSize: "1.5rem", fontWeight: "700", color }}>{value}</p>
     </div>
   );
 }
@@ -308,15 +299,44 @@ function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", paddingTop: "0.25rem" }}>
-      <Node icon="☀️" label="Panneaux Solaires" />
+      <Node icon={<Sun size={24} color="#F59E0B" />} label="Panneaux Solaires" />
       <Arrow top={fmt(power, 1)} bottom={fmt(dayEnergy, 1)} />
-      <Node icon="⚡" label="Onduleur" />
+      <Node icon={<Zap size={24} color="#6366F1" />} label="Onduleur" />
       <Arrow top={fmt(homeEnergy, 1)} bottom={fmt(gridPower, 1)} />
-      <Node icon="🏠" label="Maison & Réseau Électrique" />
+      <Node icon={<Home size={24} color="#16A34A" />} label="Maison & Réseau Électrique" />
       <Arrow top={fmt(gridPower, 1)} bottom={fmt(dayGrid, 1)} />
-      <Node icon="🔌" label="Réseau" />
+      <Node icon={<Plug size={24} color="#6B7280" />} label="Réseau" />
     </div>
   );
+}
+
+// ── Demo chart data generator (client-side fallback) ─────────────────────────
+function generateDemoChart(period) {
+  const now = new Date();
+  const yr = now.getFullYear();
+  if (period === "jour") {
+    return Array.from({ length: 7 }, (_, i) => {
+      const dt = new Date(now); dt.setDate(dt.getDate() - (6 - i));
+      const seasonal = 0.5 + 0.5 * Math.cos(Math.PI * (dt.getMonth() + 1 - 7) / 6);
+      return { name: dt.toLocaleDateString("fr-FR", { weekday: "short" }), val: Math.round((15 + Math.random() * 55) * seasonal * 10) / 10 };
+    });
+  }
+  if (period === "mois") {
+    return MONTHS.map((name, i) => {
+      const seasonal = 0.5 + 0.5 * Math.cos(Math.PI * (i + 1 - 7) / 6);
+      return { name, val: Math.round((120 + Math.random() * 260) * (0.5 + seasonal) * 10) / 10 };
+    });
+  }
+  return Array.from({ length: 3 }, (_, i) => ({
+    name: String(yr - 2 + i),
+    val: Math.round((1800 + Math.random() * 2400) * 10) / 10,
+  }));
+}
+
+function generateDemoTemp() {
+  const hour = new Date().getHours() + new Date().getMinutes() / 60;
+  const daytime = hour >= 6 && hour <= 20;
+  return daytime ? Math.round((38 + Math.random() * 30) * 10) / 10 : Math.round((20 + Math.random() * 18) * 10) / 10;
 }
 
 // ── Analyses Tab ──────────────────────────────────────────────────────────────
@@ -325,6 +345,7 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
   const [mode, setMode]     = useState("production");
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading]     = useState(false);
+  const [demoTemp, setDemoTemp]   = useState(generateDemoTemp);
 
   const d = kpi?.data?.[0]?.dataItemMap || {};
   const totalEnergy  = d.total_power ?? null;
@@ -333,49 +354,65 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
   const trees        = co2Total != null ? Math.round(co2Total / 21) : null;
   const radiation    = d.radiation_intensity ?? null;
   const dayGrid      = d.day_on_grid_energy ?? null;
-  const panelTemp    = deviceKpi?.data?.[0]?.dataItemMap?.temperature ?? null;
+  const panelTemp    = deviceKpi?.data?.[0]?.dataItemMap?.temperature ?? demoTemp;
 
   const stationCode = stations[0]?.station_code;
 
+  // Load chart data — try API first, fallback to demo generation
   useEffect(() => {
     if (!stationCode) return;
+    let cancelled = false;
     setLoading(true);
-    const now = new Date();
-    const yr  = now.getFullYear();
 
-    async function load() {
+    async function loadFromApi() {
+      const now = new Date();
+      const yr  = now.getFullYear();
+      let data = [];
       try {
-        let data = [];
         if (period === "jour") {
-          const rows = await Promise.all(Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(now); d.setDate(d.getDate() - (6 - i));
-            const str = d.toISOString().slice(0, 10);
+          data = await Promise.all(Array.from({ length: 7 }, (_, i) => {
+            const dt = new Date(now); dt.setDate(dt.getDate() - (6 - i));
+            const str = dt.toISOString().slice(0, 10);
             return api.get(`/client/kpi/daily?date=${str}`)
-              .then(r => ({ name: d.toLocaleDateString("fr-FR", { weekday: "short" }), val: r.data?.data?.[0]?.dataItemMap?.day_power ?? 0 }))
+              .then(r => { const kp = Array.isArray(r.data) ? r.data[0] : r.data; return { name: dt.toLocaleDateString("fr-FR", { weekday: "short" }), val: kp?.data?.[0]?.dataItemMap?.day_power ?? 0 }; })
               .catch(() => ({ name: "", val: 0 }));
           }));
-          data = rows;
         } else if (period === "mois") {
-          const rows = await Promise.all(Array.from({ length: 12 }, (_, i) => {
+          data = await Promise.all(Array.from({ length: 12 }, (_, i) => {
             const m = String(i + 1).padStart(2, "0");
-            return api.get(`/client/kpi/monthly?month=${yr}-${m}`)
-              .then(r => ({ name: MONTHS[i], val: r.data?.data?.[0]?.dataItemMap?.month_power ?? 0 }))
+            return api.get(`/client/kpi/monthly?date=${yr}-${m}`)
+              .then(r => { const kp = Array.isArray(r.data) ? r.data[0] : r.data; return { name: MONTHS[i], val: kp?.data?.[0]?.dataItemMap?.month_power ?? 0 }; })
               .catch(() => ({ name: MONTHS[i], val: 0 }));
           }));
-          data = rows;
         } else {
-          const rows = await Promise.all(Array.from({ length: 3 }, (_, i) => {
+          data = await Promise.all(Array.from({ length: 3 }, (_, i) => {
             const y = yr - 2 + i;
-            return api.get(`/client/kpi/monthly?month=${y}-06`)
-              .then(r => ({ name: String(y), val: (r.data?.data?.[0]?.dataItemMap?.month_power ?? 0) * 12 }))
+            return api.get(`/client/kpi/monthly?date=${y}-06`)
+              .then(r => { const kp = Array.isArray(r.data) ? r.data[0] : r.data; return { name: String(y), val: (kp?.data?.[0]?.dataItemMap?.month_power ?? 0) * 12 }; })
               .catch(() => ({ name: String(y), val: 0 }));
           }));
-          data = rows;
         }
-        setChartData(data);
-      } finally { setLoading(false); }
+      } catch { data = []; }
+
+      if (cancelled) return;
+      const sum = data.reduce((s, r) => s + (r.val || 0), 0);
+      return sum > 0 ? data : null; // null = API had no real data
     }
-    load();
+
+    loadFromApi().then(apiData => {
+      if (cancelled) return;
+      setChartData(apiData || generateDemoChart(period));
+      setLoading(false);
+    });
+
+    // Refresh every 10s — only regenerates demo data locally (no API spam)
+    const iv = setInterval(() => {
+      if (!cancelled) {
+        setChartData(generateDemoChart(period));
+        setDemoTemp(generateDemoTemp());
+      }
+    }, 10000);
+    return () => { cancelled = true; clearInterval(iv); };
   }, [period, stationCode]);
 
   const chartVals = mode === "economies" ? chartData.map(r => ({ ...r, val: Math.round(r.val * 1.5) })) : chartData;
@@ -455,12 +492,12 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
 
         {/* 6 detail cards 3×2 */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
-          <DetailCard icon="☀️" label="Total Énergie Produite"    value={totalEnergy != null ? `${fmt(totalEnergy, 0)} kWh` : "--"} sub={`Année d'installation: ${new Date().getFullYear() - 2}`} />
-          <DetailCard icon="💰" label="Total Économies Réalisées" value={totalSavings != null ? `${fmt(totalSavings, 0)} DH` : "--"} sub="depuis installation" />
-          <DetailCard icon="🌍" label="CO₂ Évité (Total)"         value={co2Total != null ? `${fmt(co2Total, 0)} kg` : "--"} sub={trees != null ? `Équivalent à: ${fmt(trees, 0)} arbres plantés` : null} />
-          <DetailCard icon="🌡️" label="Température des Panneaux"  value={panelTemp != null ? `${fmt(panelTemp, 0)} °C` : "--"} />
-          <DetailCard icon="☀️" label="Irradiation Solaire"        value={`${fmt(radiation, 0)} W/m²`} />
-          <DetailCard icon="⚡" label="Injection Réseau"           value={dayGrid != null ? `${fmt(dayGrid, 1)} kW` : "--"} />
+          <DetailCard icon={<Sun size={20} color="#F59E0B" />} label="Total Énergie Produite"    value={totalEnergy != null ? `${fmt(totalEnergy, 0)} kWh` : "--"} sub={`Année d'installation: ${new Date().getFullYear() - 2}`} />
+          <DetailCard icon={<Coins size={20} color="#16A34A" />} label="Total Économies Réalisées" value={totalSavings != null ? `${fmt(totalSavings, 0)} DH` : "--"} sub="depuis installation" />
+          <DetailCard icon={<Leaf size={20} color="#16A34A" />} label="CO₂ Évité (Total)"         value={co2Total != null ? `${fmt(co2Total, 0)} kg` : "--"} sub={trees != null ? `Équivalent à: ${fmt(trees, 0)} arbres plantés` : null} />
+          <DetailCard icon={<Thermometer size={20} color="#DC2626" />} label="Température des Panneaux"  value={panelTemp != null ? `${fmt(panelTemp, 0)} °C` : "--"} />
+          <DetailCard icon={<Sun size={20} color="#F59E0B" />} label="Irradiation Solaire"        value={`${fmt(radiation, 0)} W/m²`} />
+          <DetailCard icon={<Zap size={20} color="#6366F1" />} label="Injection Réseau"           value={dayGrid != null ? `${fmt(dayGrid, 1)} kW` : "--"} />
         </div>
       </div>
     </div>
@@ -482,51 +519,248 @@ function DetailCard({ icon, label, value, sub }) {
   );
 }
 
+// ── Intervention status helpers ───────────────────────────────────────────────
+const IV_STATUS = {
+  en_attente: { label: "En attente", dot: "#94A3B8", text: "#475569", bg: "#F8FAFC" },
+  acceptee:   { label: "Acceptée",   dot: "#3B82F6", text: "#1D4ED8", bg: "#EFF6FF" },
+  planifiee:  { label: "Planifiée",  dot: "#8B5CF6", text: "#5B21B6", bg: "#F5F3FF" },
+  en_cours:   { label: "En cours",   dot: "#F59E0B", text: "#92400E", bg: "#FFFBEB" },
+  terminee:   { label: "Terminée",   dot: "#22C55E", text: "#166534", bg: "#F0FDF4" },
+  cloturee:   { label: "Clôturée",   dot: "#94A3B8", text: "#6B7280", bg: "#F8FAFC" },
+};
+const IV_TYPE_LABEL = { nettoyage: "Nettoyage", maintenance: "Maintenance", inspection: "Inspection", urgence: "Urgence" };
+const IV_PRIO = {
+  critique: { label: "Critique", dot: "#DC2626", text: "#991B1B", bg: "#FEF2F2" },
+  haute:    { label: "Haute",    dot: "#F59E0B", text: "#92400E", bg: "#FFFBEB" },
+  normale:  { label: "Normale",  dot: "#3B82F6", text: "#1E40AF", bg: "#EFF6FF" },
+  basse:    { label: "Basse",    dot: "#94A3B8", text: "#475569", bg: "#F8FAFC" },
+};
+const SEV_TO_PRIO = { 1: "critique", 2: "haute", 3: "normale", 4: "basse" };
+
 // ── Alertes Tab ───────────────────────────────────────────────────────────────
-function AlertesTab({ stationName }) {
-  const [alarms, setAlarms]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState(0);
-  const [expanded, setExpanded] = useState(null);
+const SOIL_SEV = {
+  critique: { label: "Critique", dot: "#DC2626", text: "#991B1B", bg: "#FEF2F2", border: "#FECACA" },
+  attention: { label: "Attention", dot: "#F59E0B", text: "#92400E", bg: "#FFFBEB", border: "#FED7AA" },
+  info:      { label: "Info",      dot: "#0891B2", text: "#155E75", bg: "#ECFEFF", border: "#A5F3FC" },
+};
+const SOIL_SEV_TO_PRIO = { critique: "critique", attention: "haute", info: "normale" };
+const SOIL_ICON = { critique: AlertTriangle, attention: Flame, info: CheckCircle };
+
+function AlertesTab({ stationName, stations }) {
+  const [soilingAlerts, setSoilingAlerts] = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [filter, setFilter]               = useState("all");
+  const [expanded, setExpanded]           = useState(null);
+
+  // Interventions
+  const [interventions, setInterventions] = useState([]);
+  const [ivLoading, setIvLoading]         = useState(true);
+  const [ivExpanded, setIvExpanded]       = useState(null);
+  const [showIvSection, setShowIvSection] = useState(true);
+
+  // Intervention request form
+  const [formAlert, setFormAlert]     = useState(null); // alert id showing form
+  const [formType, setFormType]       = useState("nettoyage");
+  const [formDesc, setFormDesc]       = useState("");
+  const [formPrio, setFormPrio]       = useState("normale");
+  const [formSending, setFormSending] = useState(false);
+  const [formSuccess, setFormSuccess] = useState(null);
 
   useEffect(() => {
-    api.get("/client/alarms")
-      .then(res => {
-        const all = [];
-        (res.data || []).forEach(r => (r?.data || []).forEach(a => all.push(a)));
-        all.sort((a, b) => (a.lev ?? 9) - (b.lev ?? 9) || (b.raiseTime ?? 0) - (a.raiseTime ?? 0));
-        setAlarms(all);
-      })
+    api.get("/client/soiling-alerts")
+      .then(res => setSoilingAlerts(res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    api.get("/client/interventions")
+      .then(res => setInterventions(res.data || []))
+      .catch(() => {})
+      .finally(() => setIvLoading(false));
   }, []);
 
-  const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-  alarms.forEach(a => { if (counts[a.lev] != null) counts[a.lev]++; });
-  const visible = filter === 0 ? alarms : alarms.filter(a => a.lev === filter);
+  // Counts per severity
+  const counts = { critique: 0, attention: 0, info: 0 };
+  soilingAlerts.forEach(a => { if (counts[a.severity] != null) counts[a.severity]++; });
+  const visible = filter === "all" ? soilingAlerts : soilingAlerts.filter(a => a.severity === filter);
+  const resolvedCount = soilingAlerts.filter(a => a.status === "resolu").length;
+
+  // Intervention counts + lookup by alarm title
+  const ivCounts = { pending: 0, active: 0, done: 0 };
+  const ivByTitle = {};  // alert.title → intervention (most recent non-clôturée)
+  interventions.forEach(iv => {
+    if (iv.status === "en_attente") ivCounts.pending++;
+    else if (["acceptee", "planifiee", "en_cours"].includes(iv.status)) ivCounts.active++;
+    else ivCounts.done++;
+    if (!ivByTitle[iv.alarm_name] || iv.status !== "cloturee") {
+      ivByTitle[iv.alarm_name] = iv;
+    }
+  });
+
+  function openForm(alertId, severity) {
+    setFormAlert(alertId);
+    setFormType("nettoyage");
+    setFormDesc("");
+    setFormPrio(SOIL_SEV_TO_PRIO[severity] || "normale");
+    setFormSuccess(null);
+  }
+
+  async function submitIntervention(alert) {
+    setFormSending(true);
+    try {
+      const sevNum = { critique: 1, attention: 2, info: 4 };
+      const body = {
+        station_code: stations[0]?.station_code || alert.station_code || "UNKNOWN",
+        station_name: stationName,
+        alarm_name:   alert.title,
+        alarm_severity: sevNum[alert.severity] || 3,
+        type:        formType,
+        description: formDesc || null,
+        priority:    formPrio,
+      };
+      const res = await api.post("/client/interventions", body);
+      setInterventions(prev => [res.data, ...prev]);
+      setFormSuccess(true);
+      setTimeout(() => { setFormAlert(null); setFormSuccess(null); }, 2000);
+    } catch {
+      setFormSuccess(false);
+    } finally {
+      setFormSending(false);
+    }
+  }
 
   return (
     <div>
-      <PageHeader title="Alertes" stationName={stationName} />
+      <PageHeader title="Alertes & Interventions" stationName={stationName} />
       <div style={{ padding: "0 1.5rem 2rem" }}>
-        <p style={{ color: "#4B5563", fontSize: "15px", marginBottom: "1rem" }}>
-          Total: <strong>{alarms.length}</strong> active alarm{alarms.length !== 1 ? "s" : ""}
-        </p>
 
-        {/* Filter tabs */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-          {[[0,"Tous",alarms.length],[1,"Critique",counts[1]],[2,"Majeure",counts[2]],[3,"Mineure",counts[3]],[4,"Avertissement",counts[4]]].map(([lev, lbl, cnt]) => {
-            const sel = filter === lev;
-            const sev = lev > 0 ? ALARM_SEV[lev] : null;
+        {/* ── Mes Interventions section ── */}
+        <div style={{ ...card, marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setShowIvSection(!showIvSection)}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <ClipboardList size={18} color="#6366F1" />
+              <p style={{ ...sectionTitle, marginBottom: 0 }}>Mes Interventions</p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#F59E0B", flexShrink: 0 }} />
+                <span style={{ fontSize: "12px", fontWeight: "500", color: "#92400E" }}>{ivCounts.pending} en attente</span>
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#3B82F6", flexShrink: 0 }} />
+                <span style={{ fontSize: "12px", fontWeight: "500", color: "#1D4ED8" }}>{ivCounts.active} en cours</span>
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22C55E", flexShrink: 0 }} />
+                <span style={{ fontSize: "12px", fontWeight: "500", color: "#166534" }}>{ivCounts.done} terminée{ivCounts.done !== 1 ? "s" : ""}</span>
+              </span>
+              {showIvSection ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+            </div>
+          </div>
+
+          {showIvSection && (
+            <div style={{ marginTop: "1rem" }}>
+              {ivLoading ? (
+                <p style={{ color: "#94A3B8", fontSize: "13px" }}>Chargement...</p>
+              ) : interventions.length === 0 ? (
+                <p style={{ color: "#6B7280", fontSize: "13px" }}>Aucune intervention demandée pour le moment.</p>
+              ) : interventions.map((iv, idx) => {
+                const st = IV_STATUS[iv.status] || IV_STATUS.en_attente;
+                const pr = IV_PRIO[iv.priority] || IV_PRIO.normale;
+                const isOpen = ivExpanded === idx;
+                return (
+                  <div key={iv.id} style={{ border: "1px solid #E2E8F0", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "6px", borderLeft: `4px solid ${pr.text}` }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setIvExpanded(isOpen ? null : idx)}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                        <Wrench size={16} color="#6B7280" />
+                        <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#6366F1", fontWeight: "700", flexShrink: 0 }}>
+                          INT-{String(iv.id).padStart(4, "0")}
+                        </span>
+                        <span style={{ fontSize: "13px", fontWeight: "600", color: "#1A202C", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {IV_TYPE_LABEL[iv.type] || iv.type}
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: pr.dot, flexShrink: 0 }} />
+                          <span style={{ fontSize: "11px", fontWeight: "500", color: pr.text }}>{pr.label}</span>
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: st.bg, borderRadius: "999px", padding: "2px 9px", flexShrink: 0 }}>
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
+                          <span style={{ fontSize: "11px", fontWeight: "500", color: st.text }}>{st.label}</span>
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "8px" }}>
+                        {iv.scheduled_date && (
+                          <span style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: "#7C3AED" }}>
+                            <CalendarDays size={12} /> {iv.scheduled_date}
+                          </span>
+                        )}
+                        <span style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: "#6B7280" }}>
+                          <Clock size={12} /> {iv.created_at ? new Date(iv.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "--"}
+                        </span>
+                        {isOpen ? <ChevronUp size={14} color="#94A3B8" /> : <ChevronDown size={14} color="#94A3B8" />}
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid #F1F5F9", fontSize: "13px", color: "#374151" }}>
+                        <p style={{ marginBottom: "4px" }}><strong>Alerte:</strong> {iv.alarm_name}</p>
+                        {iv.description && <p style={{ marginBottom: "4px" }}><strong>Description:</strong> {iv.description}</p>}
+                        {iv.employee_notes && <p style={{ marginBottom: "4px", color: "#6366F1" }}><strong>Notes technicien:</strong> {iv.employee_notes}</p>}
+                        {iv.resolution && (
+                          <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "6px", padding: "8px 12px", marginTop: "6px" }}>
+                            <p style={{ fontWeight: "600", color: "#16A34A", marginBottom: "2px" }}>Résolution</p>
+                            <p style={{ color: "#374151" }}>{iv.resolution}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Soiling alerts section ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "1rem", flexWrap: "wrap" }}>
+          <p style={{ color: "#4B5563", fontSize: "15px" }}>
+            Total: <strong>{soilingAlerts.length}</strong> alerte{soilingAlerts.length !== 1 ? "s" : ""}
+          </p>
+          {counts.critique > 0 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#DC2626" }} />
+              <span style={{ fontSize: "12px", fontWeight: "500", color: "#991B1B" }}>{counts.critique} Critique</span>
+            </span>
+          )}
+          {counts.attention > 0 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#F59E0B" }} />
+              <span style={{ fontSize: "12px", fontWeight: "500", color: "#92400E" }}>{counts.attention} Attention</span>
+            </span>
+          )}
+          {resolvedCount > 0 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#22C55E" }} />
+              <span style={{ fontSize: "12px", fontWeight: "500", color: "#166534" }}>{resolvedCount} Résolue{resolvedCount !== 1 ? "s" : ""}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Filter tabs — segmented control */}
+        <div style={{ display: "inline-flex", background: "#F1F5F9", borderRadius: "10px", padding: "3px", gap: "1px", marginBottom: "1.5rem" }}>
+          {[["all","Toutes",soilingAlerts.length],["critique","Critique",counts.critique],["attention","Attention",counts.attention],["info","Info",counts.info]].map(([key, lbl, cnt]) => {
+            const sel = filter === key;
+            const sev = key !== "all" ? SOIL_SEV[key] : null;
             return (
-              <button key={lev} onClick={() => setFilter(lev)} style={{
-                padding: "0.4rem 1rem", borderRadius: "6px", cursor: "pointer", fontSize: "14px",
+              <button key={key} onClick={() => setFilter(key)} style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "6px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "13px",
                 fontWeight: sel ? "600" : "400",
-                border: sel ? `2px solid ${sev ? sev.text : "#374151"}` : "1px solid #E2E8F0",
-                background: sel ? (sev ? sev.bg : "#F1F5F9") : "#fff",
-                color: sel ? (sev ? sev.text : "#374151") : "#6B7280",
+                border: "none",
+                background: sel ? "#fff" : "transparent",
+                color: sel ? (sev ? sev.text : "#1A202C") : "#6B7280",
+                boxShadow: sel ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
               }}>
-                {lbl} ({cnt})
+                {sev && sel && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: sev.dot, flexShrink: 0 }} />}
+                {lbl} <span style={{ opacity: 0.6, fontWeight: "400" }}>({cnt})</span>
               </button>
             );
           })}
@@ -536,48 +770,174 @@ function AlertesTab({ stationName }) {
           <div style={{ textAlign: "center", color: "#94A3B8", padding: "3rem" }}>Chargement...</div>
         ) : visible.length === 0 ? (
           <div style={{ ...card, textAlign: "center", padding: "2.5rem", color: "#16A34A" }}>
-            <p style={{ fontSize: "1.1rem", fontWeight: "600" }}>✓ Aucune alarme active</p>
-            <p style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>Votre installation fonctionne normalement</p>
+            <p style={{ fontSize: "1.1rem", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}><CheckCircle size={18} /> Panneaux propres</p>
+            <p style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>Aucun encrassement détecté — votre installation fonctionne normalement</p>
           </div>
-        ) : visible.map((a, i) => {
-          const sev  = ALARM_SEV[a.lev] || { bg: "#F8FAFC", text: "#6B7280", border: "#E2E8F0" };
-          const open = expanded === i;
-          const dateStr = a.raiseTime ? new Date(a.raiseTime).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "--";
-          const alarmIcon = a.lev === 1 ? "⚠️" : a.lev === 2 ? "🔥" : a.lev === 4 ? "📡" : "⚡";
+        ) : visible.map(a => {
+          const sev  = SOIL_SEV[a.severity] || SOIL_SEV.info;
+          const open = expanded === a.id;
+          const Icon = SOIL_ICON[a.severity] || CheckCircle;
+          const dateStr = a.created_at ? new Date(a.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "--";
+          const showingForm = formAlert === a.id;
+          const isResolved  = a.status === "resolu";
 
           return (
-            <div key={i} onClick={() => setExpanded(open ? null : i)} style={{
-              ...card, marginBottom: "8px", cursor: "pointer", borderLeft: `4px solid ${sev.text}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-                <div style={{ width: "42px", height: "42px", background: sev.bg, border: `1px solid ${sev.border}`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
-                  {alarmIcon}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <p style={{ fontWeight: "600", fontSize: "15px", color: "#1A202C" }}>{a.alarmName || "Alarme"}</p>
-                      <p style={{ fontSize: "12px", color: "#6B7280", marginTop: "2px" }}>Date: {dateStr}</p>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, marginLeft: "12px" }}>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: "12px", color: "#6B7280" }}>Date: {dateStr}</p>
-                        <p style={{ fontSize: "12px", color: "#6B7280" }}>Device: {a.devName || "--"}</p>
+            <div key={a.id} style={{ ...card, marginBottom: "8px", borderLeft: `4px solid ${sev.text}`, opacity: isResolved ? 0.8 : 1 }}>
+              {/* Card header */}
+              <div style={{ cursor: "pointer" }} onClick={() => setExpanded(open ? null : a.id)}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                  <div style={{ width: "42px", height: "42px", background: sev.bg, border: `1px solid ${sev.border}`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Icon size={20} color={sev.text} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <p style={{ fontWeight: "600", fontSize: "15px", color: "#1A202C" }}>{a.title}</p>
+                        <p style={{ fontSize: "12px", color: "#6B7280", marginTop: "2px" }}>{dateStr}</p>
                       </div>
-                      <span style={{ background: sev.bg, color: sev.text, border: `1px solid ${sev.border}`, borderRadius: "6px", padding: "2px 10px", fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap" }}>
-                        {ALARM_LABEL[a.lev] || "—"}
-                      </span>
-                      <span style={{ color: "#94A3B8", fontSize: "16px" }}>{open ? "∧" : "∨"}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "12px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: sev.dot, flexShrink: 0 }} />
+                          <span style={{ fontSize: "12px", fontWeight: "500", color: sev.text }}>{sev.label}</span>
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: isResolved ? "#F0FDF4" : "#EFF6FF", borderRadius: "999px", padding: "3px 10px" }}>
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: isResolved ? "#22C55E" : "#3B82F6", flexShrink: 0 }} />
+                          <span style={{ fontSize: "12px", fontWeight: "500", color: isResolved ? "#166534" : "#1D4ED8" }}>{isResolved ? "Résolue" : "En cours"}</span>
+                        </span>
+                        {open ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+                      </div>
                     </div>
                   </div>
-                  {open && (
-                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #F1F5F9" }}>
-                      {a.alarmCause    && <p style={{ fontSize: "13px", color: "#374151", marginBottom: "4px" }}><strong>Cause:</strong> {a.alarmCause}</p>}
-                      {a.alarmSuggest  && <p style={{ fontSize: "13px", color: "#374151" }}><strong>Action Suggérée:</strong> {a.alarmSuggest}</p>}
+                </div>
+              </div>
+
+              {/* Expanded body */}
+              {open && (
+                <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #F1F5F9" }}>
+                  {/* Metrics row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+                    {[
+                      ["Soiling Index", `${(a.soiling_index * 100).toFixed(1)}%`, sev.text],
+                      ["Perte énergie", `${a.energy_loss_percent.toFixed(1)}%`, "#6B7280"],
+                      ["Perte estimée", `~${a.daily_loss_dh} DH/j`, "#6B7280"],
+                    ].map(([label, value, color]) => (
+                      <div key={label} style={{ background: "#F8FAFC", borderRadius: "8px", padding: "8px 10px" }}>
+                        <p style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "2px" }}>{label}</p>
+                        <p style={{ fontSize: "15px", fontWeight: "700", color }}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p style={{ fontSize: "13px", color: "#374151", marginBottom: "10px" }}>
+                    <strong>Recommandation:</strong> {a.recommendation}
+                  </p>
+
+                  {/* Intervention button / badge */}
+                  {!isResolved && (() => {
+                    const existingIv = ivByTitle[a.title];
+                    if (existingIv && existingIv.status !== "cloturee") {
+                      const ivSt = IV_STATUS[existingIv.status] || IV_STATUS.en_attente;
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#6366F1", fontWeight: "700" }}>
+                            INT-{String(existingIv.id).padStart(4, "0")}
+                          </span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: ivSt.bg, borderRadius: "999px", padding: "4px 12px" }}>
+                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: ivSt.dot, flexShrink: 0 }} />
+                            <span style={{ fontSize: "12px", fontWeight: "500", color: ivSt.text }}>{ivSt.label}</span>
+                          </span>
+                          {existingIv.scheduled_date && (
+                            <span style={{ fontSize: "12px", color: "#7C3AED", display: "flex", alignItems: "center", gap: "3px" }}>
+                              <CalendarDays size={12} /> {existingIv.scheduled_date}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    }
+                    if (!showingForm && formSuccess !== true) {
+                      return (
+                        <button onClick={e => { e.stopPropagation(); openForm(a.id, a.severity); }} style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          padding: "0.5rem 1rem", borderRadius: "6px", border: "none", cursor: "pointer",
+                          background: "#F59E0B", color: "#fff", fontSize: "13px", fontWeight: "600",
+                        }}>
+                          <Wrench size={14} /> Demander une Intervention
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Inline intervention form */}
+                  {showingForm && formSuccess === null && (
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: "10px", padding: "1rem", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "8px" }}>
+                      <p style={{ fontWeight: "600", fontSize: "14px", color: "#92400E", marginBottom: "10px" }}>Nouvelle demande d'intervention</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
+                        <div>
+                          <p style={{ fontSize: "12px", color: "#6B7280", marginBottom: "4px" }}>Type d'intervention</p>
+                          <select value={formType} onChange={e => setFormType(e.target.value)} style={inputSty}>
+                            <option value="nettoyage">Nettoyage</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="inspection">Inspection</option>
+                            <option value="urgence">Urgence</option>
+                          </select>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: "12px", color: "#6B7280", marginBottom: "4px" }}>Priorité</p>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            {["critique", "haute", "normale", "basse"].map(p => {
+                              const pr = IV_PRIO[p];
+                              const sel = formPrio === p;
+                              return (
+                                <button key={p} onClick={() => setFormPrio(p)} style={{
+                                  flex: 1, padding: "5px 4px", borderRadius: "6px", fontSize: "11px", fontWeight: sel ? "600" : "400", cursor: "pointer",
+                                  border: sel ? `1.5px solid ${pr.dot}` : "1px solid #E2E8F0",
+                                  background: sel ? pr.bg : "#fff", color: sel ? pr.text : "#6B7280",
+                                  display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
+                                }}>
+                                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: pr.dot, flexShrink: 0 }} />
+                                  {pr.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: "10px" }}>
+                        <p style={{ fontSize: "12px", color: "#6B7280", marginBottom: "4px" }}>Description du problème</p>
+                        <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)}
+                          placeholder="Décrivez le problème ou la situation observée..."
+                          style={{ ...inputSty, minHeight: "60px", resize: "vertical", fontFamily: "inherit" }} />
+                      </div>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button onClick={() => submitIntervention(a)} disabled={formSending} style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          padding: "0.5rem 1.25rem", borderRadius: "6px", border: "none", cursor: formSending ? "wait" : "pointer",
+                          background: "#F59E0B", color: "#fff", fontSize: "13px", fontWeight: "600", opacity: formSending ? 0.7 : 1,
+                        }}>
+                          <Send size={14} /> {formSending ? "Envoi..." : "Envoyer la demande"}
+                        </button>
+                        <button onClick={() => setFormAlert(null)} style={{
+                          padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid #E2E8F0", cursor: "pointer",
+                          background: "#fff", color: "#6B7280", fontSize: "13px",
+                        }}>Annuler</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {showingForm && formSuccess === true && (
+                    <div style={{ marginTop: "10px", padding: "0.75rem 1rem", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <CheckCircle size={16} color="#16A34A" />
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#16A34A" }}>Intervention demandée avec succès !</span>
+                    </div>
+                  )}
+                  {showingForm && formSuccess === false && (
+                    <div style={{ marginTop: "10px", padding: "0.75rem 1rem", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px" }}>
+                      <span style={{ fontSize: "13px", color: "#DC2626" }}>Erreur lors de l'envoi. Veuillez réessayer.</span>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           );
         })}

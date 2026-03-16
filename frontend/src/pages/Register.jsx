@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Sun } from "lucide-react";
 
 export default function Register() {
   const { register } = useAuth();
@@ -26,7 +27,7 @@ export default function Register() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <div style={s.logo}>☀️</div>
+        <div style={s.logo}><Sun size={36} color="#F59E0B" /></div>
         <h1 style={s.title}>Créer un compte</h1>
         <p style={s.sub}>Rejoignez Solar AI Monitor</p>
         {error && <div style={s.error}>{error}</div>}
@@ -60,7 +61,7 @@ export default function Register() {
 const s = {
   page: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0F172A", padding: "1rem" },
   card: { background: "#1E293B", border: "1px solid #334155", borderRadius: "16px", padding: "2.5rem 2rem", width: "100%", maxWidth: "400px" },
-  logo: { fontSize: "2.5rem", textAlign: "center", marginBottom: "0.5rem" },
+  logo: { fontSize: "2.5rem", textAlign: "center", marginBottom: "0.5rem", display: "flex", justifyContent: "center" },
   title: { textAlign: "center", fontSize: "1.5rem", fontWeight: "700", color: "#F1F5F9", marginBottom: "0.25rem" },
   sub: { textAlign: "center", color: "#94A3B8", fontSize: "0.9rem", marginBottom: "1.75rem" },
   label: { display: "block", fontSize: "13px", color: "#94A3B8", marginBottom: "6px", marginTop: "1rem" },

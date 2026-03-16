@@ -6,7 +6,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("user"));
+      return JSON.parse(sessionStorage.getItem("user"));
     } catch {
       return null;
     }
@@ -14,9 +14,9 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", data.access_token);
+    sessionStorage.setItem("token", data.access_token);
     const me = await api.get("/auth/me");
-    localStorage.setItem("user", JSON.stringify(me.data));
+    sessionStorage.setItem("user", JSON.stringify(me.data));
     setUser(me.data);
     return me.data;
   }
@@ -26,8 +26,8 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setUser(null);
   }
 

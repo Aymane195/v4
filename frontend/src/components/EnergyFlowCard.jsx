@@ -1,3 +1,5 @@
+import { Sun, Zap, Home, Plug } from "lucide-react";
+
 function Node({ label, value, unit, color = "#F59E0B", icon }) {
   return (
     <div style={s.node}>
@@ -17,13 +19,13 @@ export default function EnergyFlowCard({ power, homeEnergy, gridPower }) {
     <div style={s.card}>
       <p style={s.title}>Flux Énergétique</p>
       <div style={s.flow}>
-        <Node label="Panneaux" value={power} unit="kW" icon="☀️" color="#F59E0B" />
+        <Node label="Panneaux" value={power} unit="kW" icon={<Sun size={22} color="#F59E0B" />} color="#F59E0B" />
         <Arrow />
-        <Node label="Onduleur" value={power} unit="kW" icon="⚡" color="#60A5FA" />
+        <Node label="Onduleur" value={power} unit="kW" icon={<Zap size={22} color="#60A5FA" />} color="#60A5FA" />
         <Arrow />
-        <Node label="Domicile" value={homeEnergy} unit="kWh" icon="🏠" color="#10B981" />
+        <Node label="Domicile" value={homeEnergy} unit="kWh" icon={<Home size={22} color="#10B981" />} color="#10B981" />
         <Arrow />
-        <Node label="Réseau" value={gridPower} unit="kW" icon="🔌" color="#A78BFA" />
+        <Node label="Réseau" value={gridPower} unit="kW" icon={<Plug size={22} color="#A78BFA" />} color="#A78BFA" />
       </div>
     </div>
   );
@@ -42,7 +44,7 @@ const s = {
   nodeIcon: {
     width: "44px", height: "44px", borderRadius: "50%",
     border: "2px solid", display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: "1.2rem", background: "#0F172A",
+    background: "#0F172A",
   },
   nodeLabel: { fontSize: "10px", color: "#94A3B8", textAlign: "center" },
   nodeVal: { fontSize: "13px", fontWeight: "700", textAlign: "center" },
