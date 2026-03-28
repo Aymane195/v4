@@ -18,3 +18,12 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 # JWT
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+
+# Email / SMTP
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Solar AI-Optimizer")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
+EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"

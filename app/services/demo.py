@@ -87,20 +87,29 @@ def monthly_kpi(month_str: str) -> dict:
 
 
 def soiling() -> dict:
-    index = round(random.uniform(0.01, 0.14), 4)
-    if index < 0.02:
+    """Random soiling prediction — different state on each call for dev testing."""
+    # Pick from 3 ranges: clean, attention, critique
+    _RANGES = [(0.05, 0.12), (0.18, 0.35), (0.42, 0.50)]
+    lo, hi = random.choice(_RANGES)
+    index = round(random.uniform(lo, hi), 4)
+    if index < 0.15:
         status, rec = "clean", "Panneaux propres. Aucune action requise."
-    elif index < 0.05:
-        status, rec = "light_soiling", "Légère poussière. Nettoyage recommandé dans 2 semaines."
-    elif index < 0.10:
-        status, rec = "moderate_soiling", "Encrassement modéré. Nettoyage recommandé cette semaine."
+        alert_level, confidence = "NORMAL", 95
+    elif index < 0.40:
+        status, rec = "attention", "Encrassement modéré détecté. Nettoyage recommandé cette semaine."
+        alert_level = "ALERTE" if index >= 0.20 else "AVERTISSEMENT"
+        confidence = 80
     else:
-        status, rec = "heavy_soiling", "Encrassement important. Nettoyage immédiat recommandé."
+        status, rec = "critique", "Encrassement critique. Nettoyage immédiat recommandé."
+        alert_level, confidence = "CRITIQUE", 80
     return {
         "soiling_index": index,
         "energy_loss_percent": round(index * 100, 2),
         "status": status,
         "recommendation": rec,
+        "confidence": confidence,
+        "alert_level": alert_level,
+        "diagnostic": "Données de démonstration — moteur hybride simulé",
     }
 
 
@@ -271,52 +280,37 @@ def demo_interventions(client_id: int) -> list[dict]:
 # ── Demo soiling alerts ───────────────────────────────────────────────────────
 
 def demo_soiling_alerts() -> list[dict]:
-    """Return 3 fake soiling alert history entries at different severities."""
+    """Derive soiling alerts from soiling() — single source of truth with the gauge."""
+    result = soiling()
+    severity = result["status"]
+
+    if severity == "clean":
+        return []  # No alert when panels are clean (> 85%)
+
     now = datetime.utcnow()
-    return [
-        {
-            "id": "SA-001",
-            "severity": "critique",
-            "status": "en_cours",
-            "title": "Encrassement critique détecté — Soiling Index élevé",
-            "soiling_index": 0.132,
-            "energy_loss_percent": 13.2,
-            "daily_loss_dh": 18.0,
-            "recommendation": "Nettoyage immédiat recommandé. La production est réduite de 13.2%.",
-            "created_at": now.isoformat(),
-            "resolved_at": None,
-            "station_code": DEMO_STATION_CODE,
-            "station_name": DEMO_STATION_NAME,
-        },
-        {
-            "id": "SA-002",
-            "severity": "attention",
-            "status": "en_cours",
-            "title": "Encrassement modéré détecté",
-            "soiling_index": 0.074,
-            "energy_loss_percent": 7.4,
-            "daily_loss_dh": 9.0,
-            "recommendation": "Nettoyage recommandé cette semaine. Perte de rendement progressive détectée.",
-            "created_at": (now - timedelta(days=3)).isoformat(),
-            "resolved_at": None,
-            "station_code": DEMO_STATION_CODE,
-            "station_name": DEMO_STATION_NAME,
-        },
-        {
-            "id": "SA-003",
-            "severity": "info",
-            "status": "resolu",
-            "title": "Légère accumulation de poussière détectée",
-            "soiling_index": 0.028,
-            "energy_loss_percent": 2.8,
-            "daily_loss_dh": 3.5,
-            "recommendation": "Nettoyage effectué. Rendement rétabli à 97%.",
-            "created_at": (now - timedelta(days=8)).isoformat(),
-            "resolved_at": (now - timedelta(days=6)).isoformat(),
-            "station_code": DEMO_STATION_CODE,
-            "station_name": DEMO_STATION_NAME,
-        },
-    ]
+    title_map = {
+        "attention": "Encrassement modéré détecté",
+        "critique": "Encrassement critique détecté — Soiling Index élevé",
+    }
+    daily_loss = round(result["energy_loss_percent"] * 0.15 * 50, 1)
+
+    return [{
+        "id": f"SA-{DEMO_STATION_CODE[:8]}",
+        "severity": severity,
+        "status": "en_cours",
+        "title": title_map.get(severity, "Alerte encrassement"),
+        "soiling_index": result["soiling_index"],
+        "energy_loss_percent": result["energy_loss_percent"],
+        "daily_loss_dh": daily_loss,
+        "recommendation": result["recommendation"],
+        "confidence": result.get("confidence"),
+        "alert_level": result.get("alert_level"),
+        "diagnostic": result.get("diagnostic"),
+        "created_at": now.isoformat(),
+        "resolved_at": None,
+        "station_code": DEMO_STATION_CODE,
+        "station_name": DEMO_STATION_NAME,
+    }]
 
 
 # ── Account seeding ───────────────────────────────────────────────────────────

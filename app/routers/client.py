@@ -1,16 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, ClientStation
+from app.models import User, ClientStation, Intervention, InterventionType, InterventionStatus
 from app.auth import require_role
 from app.services.fusionsolar import client as fs
 from app.services import demo as demo_svc
+from app.services.email import send_critique_soiling_alert
+from app.services import weather as weather_svc
 import calendar
 import datetime
+import threading
 
 router = APIRouter(prefix="/client", tags=["Client"])
 
 _require_client = require_role("client")
+
+# Track which (user_id, station_code) pairs already received a critique email
+# this server session (resets on restart — acceptable for this app's scale).
+_critique_email_sent: set[tuple[int, str]] = set()
 
 
 def _get_station_codes(current_user: User, db: Session) -> list[str]:
@@ -142,7 +149,7 @@ def get_soiling_alerts(
     from app.services import soiling as soiling_service
     codes = _get_station_codes(current_user, db)
     if any(demo_svc.is_demo(c) for c in codes):
-        return demo_svc.demo_soiling_alerts()
+        return [a for a in demo_svc.demo_soiling_alerts() if a["severity"] != "info"]
 
     # Real clients: return current soiling reading as a single alert (if soiling detected)
     alerts = []
@@ -151,18 +158,45 @@ def get_soiling_alerts(
             kpi_data = fs.get_station_real_kpi([code])
             data_list = kpi_data.get("data", [])
             kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
+
+            radiation   = kpi.get("radiation_intensity") or 0.0
+            inverter_pwr = kpi.get("inverter_power") or 0.0
+            capacity    = kpi.get("installed_capacity") or 1.0
+
+            # Look up last cleaning from interventions so the model knows how dirty panels likely are
+            last_clean = (
+                db.query(Intervention)
+                .filter(
+                    Intervention.station_code == code,
+                    Intervention.type == InterventionType.nettoyage,
+                    Intervention.status == InterventionStatus.terminee,
+                    Intervention.completed_date.isnot(None),
+                )
+                .order_by(Intervention.completed_date.desc())
+                .first()
+            )
+            days_since_cleaning = (
+                max(0, (datetime.datetime.utcnow() - last_clean.completed_date).days)
+                if last_clean and last_clean.completed_date else 30
+            )
+
             features = {
-                "radiation_intensity": kpi.get("radiation_intensity"),
-                "inverter_power":      kpi.get("inverter_power"),
-                "installed_capacity":  kpi.get("installed_capacity"),
-                "temperature":         kpi.get("temperature"),
+                "installed_capacity_kwp":   capacity,
+                "p_theoretical_kwh":        capacity * (radiation / 1000.0) if radiation else None,
+                "p_real":                   inverter_pwr,
+                "days_since_last_cleaning": days_since_cleaning,
             }
+
+            # Fetch real weather from Open-Meteo (replaces hardcoded defaults)
+            coords = fs.get_station_location(code)
+            if coords:
+                features.update(weather_svc.get_weather(*coords))
             result = soiling_service.predict_soiling(features)
-            if result["soiling_index"] < 0.02:
-                continue  # Clean — no alert needed
-            sev_map   = {"clean": "info", "light_soiling": "info", "moderate_soiling": "attention", "heavy_soiling": "critique"}
-            title_map = {"info": "Légère accumulation de poussière détectée", "attention": "Encrassement modéré détecté", "critique": "Encrassement critique détecté — Soiling Index élevé"}
-            severity  = sev_map.get(result["status"], "info")
+            severity = result["status"]  # clean, attention, or critique
+            if severity == "clean":
+                continue  # no alert when panels are clean
+            title_map = {"attention": "Encrassement modéré détecté", "critique": "Encrassement critique détecté — Soiling Index élevé"}
+            daily_loss = round(result["energy_loss_percent"] * 0.15 * 50, 1)
             alerts.append({
                 "id": f"SA-{code[:8]}",
                 "severity": severity,
@@ -170,13 +204,34 @@ def get_soiling_alerts(
                 "title": title_map.get(severity, "Alerte encrassement"),
                 "soiling_index": result["soiling_index"],
                 "energy_loss_percent": result["energy_loss_percent"],
-                "daily_loss_dh": round(result["energy_loss_percent"] * 0.15 * 50, 1),
+                "daily_loss_dh": daily_loss,
                 "recommendation": result["recommendation"],
+                "confidence": result.get("confidence"),
+                "alert_level": result.get("alert_level"),
+                "diagnostic": result.get("diagnostic"),
                 "created_at": datetime.datetime.utcnow().isoformat(),
                 "resolved_at": None,
                 "station_code": code,
                 "station_name": code,
             })
+            # Auto-email client on critique detection (once per server session)
+            if severity == "critique":
+                key = (current_user.id, code)
+                if key not in _critique_email_sent:
+                    _critique_email_sent.add(key)
+                    threading.Thread(
+                        target=send_critique_soiling_alert,
+                        args=(
+                            current_user.email,
+                            current_user.full_name,
+                            code,
+                            result["soiling_index"],
+                            result["energy_loss_percent"],
+                            daily_loss,
+                            result["recommendation"],
+                        ),
+                        daemon=True,
+                    ).start()
         except Exception:
             pass
     return alerts

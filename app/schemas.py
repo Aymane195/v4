@@ -56,18 +56,34 @@ class ClientStationOut(BaseModel):
 # --- Soiling ---
 
 class SoilingRequest(BaseModel):
+    # FusionSolar realtime fields
     radiation_intensity: Optional[float] = None
-    power_ratio: Optional[float] = None
     inverter_power: Optional[float] = None
-    temperature: Optional[float] = None
     installed_capacity: Optional[float] = None
+    temperature: Optional[float] = None
+    power_ratio: Optional[float] = None
+    # Extended fields for full hybrid-engine accuracy
+    irradiation_kwh_m2: Optional[float] = None
+    temp_air_c: Optional[float] = None
+    humidity_pct: Optional[float] = None
+    wind_speed_ms: Optional[float] = None
+    precipitation_mm: Optional[float] = None
+    days_since_last_rain: Optional[int] = None
+    days_since_last_cleaning: Optional[int] = None
+    installed_capacity_kwp: Optional[float] = None
+    p_theoretical_kwh: Optional[float] = None
+    p_real: Optional[float] = None   # actual production for Method 1
 
 
 class SoilingResponse(BaseModel):
     soiling_index: float
     energy_loss_percent: float
-    status: str          # "clean", "light_soiling", "moderate_soiling", "heavy_soiling"
+    status: str
     recommendation: str
+    # Enriched fields from hybrid engine
+    confidence: Optional[int] = None
+    alert_level: Optional[str] = None
+    diagnostic: Optional[str] = None
 
 
 # --- Interventions ---

@@ -142,6 +142,20 @@ class FusionSolarClient:
             payload["endTime"] = end_time
         return self._request("/thirdData/getAlarmList", payload)
 
+    def get_station_location(self, station_code: str) -> tuple[float, float] | None:
+        """Return (latitude, longitude) for a station from the station list, or None."""
+        try:
+            data = self.get_station_list()
+            for entry in data.get("data", []):
+                if entry.get("stationCode") == station_code:
+                    lat = entry.get("latitude")
+                    lng = entry.get("longitude")
+                    if lat is not None and lng is not None:
+                        return (float(lat), float(lng))
+        except Exception:
+            pass
+        return None
+
     # ------------------------------------------------------------------
     # Domain discovery
     # ------------------------------------------------------------------

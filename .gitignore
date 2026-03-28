@@ -13,8 +13,7 @@ build/
 .venv/
 venv/
 
-# ML model binaries
-ml_models/*.pkl
+# ML model binaries (keeping .pkl to include trained model in repo)
 ml_models/*.joblib
 ml_models/*.h5
 
