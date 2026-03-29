@@ -256,14 +256,21 @@ def get_soiling_alerts(
             data_list = kpi_data.get("data", [])
             kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-            capacity = kpi.get("installed_capacity") or None
+            # Capacity priority: 1) our DB (most reliable), 2) FusionSolar station list, 3) default
+            db_station = db.query(ClientStation).filter(ClientStation.station_code == code).first()
+            capacity = db_station.installed_capacity_kwp if db_station and db_station.installed_capacity_kwp else None
+            if not capacity:
+                capacity = kpi.get("installed_capacity") or None
             if not capacity:
                 capacity = fs.get_station_capacity(code)
             capacity = float(capacity) if capacity else 10.0
             day_power = kpi.get("day_power")
 
-            logger.info("[soiling] station %s: computing fresh — hour_local=%d, day_power=%s, capacity=%s kWp",
-                        code, hour_local, day_power, capacity)
+            cap_source = ("db" if (db_station and db_station.installed_capacity_kwp)
+                          else "kpi" if kpi.get("installed_capacity")
+                          else "default")
+            logger.info("[soiling] station %s: computing fresh — hour_local=%d, day_power=%s, capacity=%s kWp (source=%s)",
+                        code, hour_local, day_power, capacity, cap_source)
 
             # Guard: need real production data to predict
             if not day_power:

@@ -6,7 +6,7 @@ from app.services import weather as weather_svc
 from app.services.fusionsolar import client as fs
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import User, Intervention, InterventionType, InterventionStatus
+from app.models import User, ClientStation, Intervention, InterventionType, InterventionStatus
 from datetime import datetime, timedelta
 import logging  # noqa: E402
 
@@ -83,14 +83,20 @@ def predict_for_station(
     data_list = kpi_data.get("data", [])
     kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-    capacity = kpi.get("installed_capacity") or None
+    # Capacity priority: 1) our DB, 2) FusionSolar KPI enrichment, 3) station list, 4) default
+    db_station = db.query(ClientStation).filter(ClientStation.station_code == station_code).first()
+    capacity = db_station.installed_capacity_kwp if db_station and db_station.installed_capacity_kwp else None
+    if not capacity:
+        capacity = kpi.get("installed_capacity") or None
     if not capacity:
         capacity = fs.get_station_capacity(station_code)
     capacity = float(capacity) if capacity else 10.0
     day_power = kpi.get("day_power")
 
-    logger.info("[soiling] station %s: computing — hour_local=%d, day_power=%s, capacity=%s kWp",
-                station_code, hour_local, day_power, capacity)
+    cap_source = ("db" if (db_station and db_station.installed_capacity_kwp)
+                  else "kpi" if kpi.get("installed_capacity") else "default")
+    logger.info("[soiling] station %s: computing — hour_local=%d, day_power=%s, capacity=%s kWp (source=%s)",
+                station_code, hour_local, day_power, capacity, cap_source)
 
     features = {
         "installed_capacity_kwp":   capacity,

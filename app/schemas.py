@@ -58,6 +58,7 @@ class UserOut(BaseModel):
 class ClientStationIn(BaseModel):
     station_code: str
     station_name: Optional[str] = None
+    installed_capacity_kwp: Optional[float] = None  # kWp — used for soiling calculations
 
 
 class ClientStationOut(BaseModel):
@@ -65,6 +66,7 @@ class ClientStationOut(BaseModel):
     client_id: int
     station_code: str
     station_name: Optional[str]
+    installed_capacity_kwp: Optional[float] = None
 
     class Config:
         from_attributes = True

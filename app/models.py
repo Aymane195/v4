@@ -71,6 +71,7 @@ class ClientStation(Base):
     client_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     station_code = Column(String(255), nullable=False)
     station_name = Column(String(255), nullable=True)
+    installed_capacity_kwp = Column(Float, nullable=True)  # kWp — authoritative source for soiling
 
     client = relationship("User", back_populates="stations")
 

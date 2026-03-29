@@ -59,8 +59,36 @@ def assign_station(
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Station already assigned to this client")
-    station = ClientStation(client_id=client_id, station_code=body.station_code, station_name=body.station_name)
+    station = ClientStation(
+        client_id=client_id,
+        station_code=body.station_code,
+        station_name=body.station_name,
+        installed_capacity_kwp=body.installed_capacity_kwp,
+    )
     db.add(station)
+    db.commit()
+    db.refresh(station)
+    return station
+
+
+@router.patch("/clients/{client_id}/stations/{station_code}", response_model=ClientStationOut)
+def update_station(
+    client_id: int,
+    station_code: str,
+    body: ClientStationIn,
+    current_user: User = Depends(_require_employee),
+    db: Session = Depends(get_db),
+):
+    station = db.query(ClientStation).filter(
+        ClientStation.client_id == client_id,
+        ClientStation.station_code == station_code,
+    ).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+    if body.station_name is not None:
+        station.station_name = body.station_name
+    if body.installed_capacity_kwp is not None:
+        station.installed_capacity_kwp = body.installed_capacity_kwp
     db.commit()
     db.refresh(station)
     return station

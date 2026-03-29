@@ -25,6 +25,14 @@ with engine.connect() as conn:
             conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
     conn.commit()
 
+# Add new columns to client_stations table (safe to re-run)
+with engine.connect() as conn:
+    inspector = inspect(engine)
+    existing_cs = {c["name"] for c in inspector.get_columns("client_stations")}
+    if "installed_capacity_kwp" not in existing_cs:
+        conn.execute(text("ALTER TABLE client_stations ADD COLUMN installed_capacity_kwp FLOAT NULL"))
+    conn.commit()
+
 # Seed demo accounts (no-op if already exist)
 from app.services.demo import seed_demo_accounts
 seed_demo_accounts()
