@@ -159,6 +159,22 @@ def predict_soiling(features: dict) -> dict:
 
     power_ratio = float(np.clip(power_ratio, 0.0, 1.5))
 
+    # ── Early exit: production ≥ theoretical → panels are clean ──────────────
+    # power_ratio >= 1.0 means real production equals or exceeds theoretical.
+    # This is physically impossible if panels are dirty — they must be clean.
+    # The ML model was trained on power_ratio 0.3–1.0 and outputs garbage above 1.0.
+    if power_ratio >= 1.0:
+        logger.info("[soiling] power_ratio=%.3f >= 1.0 → production at/above theoretical, clean", power_ratio)
+        return {
+            "soiling_index":       0.0,
+            "energy_loss_percent": 0.0,
+            "status":              "clean",
+            "recommendation":      "Panneaux propres. Production au niveau théorique.",
+            "confidence":          99,
+            "alert_level":         "NORMAL",
+            "diagnostic":          f"Production réelle ({power_ratio:.2f}×) ≥ théorique — panneaux propres",
+        }
+
     # ── Build 9-feature vector ────────────────────────────────────────────────
     fv = {
         "irradiation_kwh_m2":       irrad,
