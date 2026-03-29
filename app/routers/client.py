@@ -296,13 +296,18 @@ def get_soiling_alerts(
                 features.update(weather_svc.get_weather(*coords))
             result = soiling_service.predict_soiling(features)
 
-            # Cache the result for this solar day
-            _soiling_daily_cache[code] = {
-                "result": result, "date": today_str,
-                "capacity": capacity, "computed_at": now_utc.isoformat(),
-            }
-            logger.info("[soiling] station %s: cached new prediction — soiling=%.4f (%s)",
-                        code, result["soiling_index"], result["status"])
+            # Only cache after 20:00 local — before that, day_power is still partial
+            # and would give a falsely high soiling index (e.g. 46% at 1pm = half-day data)
+            if hour_local >= _SOILING_REFRESH_HOUR:
+                _soiling_daily_cache[code] = {
+                    "result": result, "date": today_str,
+                    "capacity": capacity, "computed_at": now_utc.isoformat(),
+                }
+                logger.info("[soiling] station %s: cached final prediction — soiling=%.4f (%s)",
+                            code, result["soiling_index"], result["status"])
+            else:
+                logger.info("[soiling] station %s: live prediction (not cached, day incomplete) — soiling=%.4f",
+                            code, result["soiling_index"])
             severity = result["status"]  # clean, attention, or critique
             if severity == "clean":
                 continue  # no alert when panels are clean

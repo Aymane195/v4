@@ -107,12 +107,17 @@ def predict_for_station(
 
     result = soiling_service.predict_soiling(features)
 
-    # Cache the result for this solar day
-    _soiling_daily_cache[station_code] = {
-        "result": result, "date": today_str, "capacity": capacity,
-    }
-    logger.info("[soiling] station %s: cached prediction — soiling=%.4f (%s)",
-                station_code, result["soiling_index"], result["status"])
+    # Only cache after 20:00 — before that, day_power is partial (midday request
+    # would give falsely high soiling from incomplete daily production)
+    if hour_local >= _SOILING_REFRESH_HOUR:
+        _soiling_daily_cache[station_code] = {
+            "result": result, "date": today_str, "capacity": capacity,
+        }
+        logger.info("[soiling] station %s: cached final prediction — soiling=%.4f (%s)",
+                    station_code, result["soiling_index"], result["status"])
+    else:
+        logger.info("[soiling] station %s: live prediction (not cached, day incomplete) — soiling=%.4f",
+                    station_code, result["soiling_index"])
 
     return result
 
