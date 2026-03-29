@@ -460,20 +460,26 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
       return sum > 0 ? data : null; // null = API had no real data
     }
 
+    let iv = null;
     loadFromApi().then(apiData => {
       if (cancelled) return;
-      setChartData(apiData || generateDemoChart(period));
+      if (apiData) {
+        // Real FusionSolar data — set once, no auto-refresh (history doesn't change)
+        setChartData(apiData);
+      } else {
+        // No real data — use animated demo
+        setChartData(generateDemoChart(period));
+        iv = setInterval(() => {
+          if (!cancelled) {
+            setChartData(generateDemoChart(period));
+            setDemoTemp(generateDemoTemp());
+          }
+        }, 10000);
+      }
       setLoading(false);
     });
 
-    // Refresh every 10s â?? only regenerates demo data locally (no API spam)
-    const iv = setInterval(() => {
-      if (!cancelled) {
-        setChartData(generateDemoChart(period));
-        setDemoTemp(generateDemoTemp());
-      }
-    }, 10000);
-    return () => { cancelled = true; clearInterval(iv); };
+    return () => { cancelled = true; if (iv) clearInterval(iv); };
   }, [period, stationCode]);
 
   const chartVals = mode === "economies" ? chartData.map(r => ({ ...r, val: Math.round(r.val * 1.5) })) : chartData;
