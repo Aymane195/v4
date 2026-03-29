@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, date
-from app.models import UserRole, InterventionType, InterventionPriority, InterventionStatus
+from app.models import UserRole, InstallationType, AlertPreference, InterventionType, InterventionPriority, InterventionStatus
 
 
 # --- Auth ---
@@ -11,11 +11,22 @@ class RegisterRequest(BaseModel):
     password: str
     full_name: str
     role: UserRole
+    phone: Optional[str] = None
+    installation_type: Optional[InstallationType] = None
+    num_panels: Optional[int] = None
+    fusionsolar_username: Optional[str] = None
+    fusionsolar_password: Optional[str] = None
+    alert_preference: Optional[AlertPreference] = AlertPreference.email
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class TokenResponse(BaseModel):
@@ -30,6 +41,12 @@ class UserOut(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    phone: Optional[str] = None
+    installation_type: Optional[InstallationType] = None
+    num_panels: Optional[int] = None
+    fusionsolar_username: Optional[str] = None
+    fusionsolar_password: Optional[str] = None
+    alert_preference: Optional[AlertPreference] = None
     created_at: datetime
 
     class Config:

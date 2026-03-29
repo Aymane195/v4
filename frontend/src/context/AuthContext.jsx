@@ -21,8 +21,8 @@ export function AuthProvider({ children }) {
     return me.data;
   }
 
-  async function register(email, password, full_name, role) {
-    await api.post("/auth/register", { email, password, full_name, role });
+  async function register(data) {
+    await api.post("/auth/register", { role: "client", ...data });
   }
 
   function logout() {

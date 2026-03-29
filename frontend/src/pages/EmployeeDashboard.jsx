@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
@@ -353,6 +353,10 @@ function ClientsTab({ clients, allStations, stationKpi }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newStation, setNewStation] = useState({ client_id: "", station_code: "", station_name: "" });
   const [msg, setMsg] = useState("");
+  const [expandedRow, setExpandedRow] = useState(null);
+
+  const INSTALL_LABELS = { residentielle: "Résidentielle", commerciale: "Commerciale", industrielle: "Industrielle" };
+  const ALERT_LABELS = { email: "Email", whatsapp: "WhatsApp", both: "Email + WhatsApp" };
 
   // Build table rows: one row per client-station pair
   const clientMap = Object.fromEntries(clients.map(c => [c.id, c]));
@@ -472,50 +476,93 @@ function ClientsTab({ clients, allStations, stationKpi }) {
             <thead>
               <tr style={{ background: "#F8FAFC" }}>
                 <th style={th}>Client</th>
-                <th style={th}>Email</th>
+                <th style={th}>Email / Tél</th>
+                <th style={th}>Type</th>
                 <th style={th}>Code Station</th>
-                <th style={th}>Dernière Synchro</th>
-                <th style={th}>Statut Health</th>
+                <th style={th}>Statut</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
                 <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#94A3B8", padding: "2rem" }}>Aucun résultat.</td></tr>
-              ) : sorted.map((r, i) => (
-                <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#FAFBFC" }}>
-                  <td style={td}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: r.health.color === "#DC2626" ? "#FCA5A5" : "#CBD5E0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "13px", color: "#374151", flexShrink: 0 }}>
-                        {r.client.full_name[0]}
-                      </div>
-                      <div>
-                        <p style={{ fontWeight: "600", fontSize: "14px", color: "#1A202C" }}>{r.client.full_name}</p>
-                        <p style={{ fontSize: "11px", color: "#94A3B8" }}>({r.st.station_name || r.st.station_code})</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={td}>{r.client.email}</td>
-                  <td style={td}><span style={{ fontFamily: "monospace", fontSize: "13px" }}>{r.st.station_code}</span></td>
-                  <td style={td}>{r.kpi.day_power != null ? new Date().toLocaleDateString("fr-FR") : "--"}</td>
-                  <td style={td}>
-                    <span style={{ background: r.health.bg, color: r.health.color, borderRadius: "4px", padding: "2px 10px", fontSize: "12px", fontWeight: "600" }}>
-                      {r.health.label}
-                    </span>
-                  </td>
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <button style={{ padding: "3px 10px", background: "none", border: "1px solid #E2E8F0", borderRadius: "4px", fontSize: "12px", cursor: "pointer", color: "#374151" }}>
-                        <Pencil size={12} style={{ verticalAlign: "middle", marginRight: "3px" }} /> Modifier
-                      </button>
-                      <button onClick={() => handleRemove(r.client.id, r.st.station_code)}
-                        style={{ padding: "3px 10px", background: "none", border: "1px solid #FECACA", borderRadius: "4px", fontSize: "12px", cursor: "pointer", color: "#DC2626" }}>
-                        Supprimer
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              ) : sorted.map((r, i) => {
+                const isExpanded = expandedRow === i;
+                return (
+                  <React.Fragment key={i}>
+                    <tr style={{ background: i % 2 === 0 ? "#fff" : "#FAFBFC", cursor: "pointer" }} onClick={() => setExpandedRow(isExpanded ? null : i)}>
+                      <td style={td}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: r.health.color === "#DC2626" ? "#FCA5A5" : "#CBD5E0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "13px", color: "#374151", flexShrink: 0 }}>
+                            {r.client.full_name[0]}
+                          </div>
+                          <div>
+                            <p style={{ fontWeight: "600", fontSize: "14px", color: "#1A202C" }}>{r.client.full_name}</p>
+                            <p style={{ fontSize: "11px", color: "#94A3B8" }}>({r.st.station_name || r.st.station_code})</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={td}>
+                        <p style={{ fontSize: "13px", color: "#374151" }}>{r.client.email}</p>
+                        {r.client.phone && <p style={{ fontSize: "12px", color: "#6B7280" }}>{r.client.phone}</p>}
+                      </td>
+                      <td style={td}>
+                        {r.client.installation_type ? (
+                          <span style={{ background: "#EFF6FF", color: "#2563EB", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", fontWeight: "600" }}>
+                            {INSTALL_LABELS[r.client.installation_type] || r.client.installation_type}
+                          </span>
+                        ) : <span style={{ fontSize: "12px", color: "#94A3B8" }}>--</span>}
+                      </td>
+                      <td style={td}><span style={{ fontFamily: "monospace", fontSize: "13px" }}>{r.st.station_code}</span></td>
+                      <td style={td}>
+                        <span style={{ background: r.health.bg, color: r.health.color, borderRadius: "4px", padding: "2px 10px", fontSize: "12px", fontWeight: "600" }}>
+                          {r.health.label}
+                        </span>
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : i); }} style={{ padding: "3px 10px", background: "none", border: "1px solid #E2E8F0", borderRadius: "4px", fontSize: "12px", cursor: "pointer", color: "#374151" }}>
+                            {isExpanded ? <ChevronUp size={12} style={{ verticalAlign: "middle", marginRight: "3px" }} /> : <ChevronDown size={12} style={{ verticalAlign: "middle", marginRight: "3px" }} />}
+                            Détails
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleRemove(r.client.id, r.st.station_code); }}
+                            style={{ padding: "3px 10px", background: "none", border: "1px solid #FECACA", borderRadius: "4px", fontSize: "12px", cursor: "pointer", color: "#DC2626" }}>
+                            Supprimer
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr style={{ background: "#F8FAFC" }}>
+                        <td colSpan={6} style={{ padding: "12px 20px", borderBottom: "1px solid #E2E8F0" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
+                            <div>
+                              <p style={{ fontSize: "11px", color: "#6B7280", marginBottom: "2px", fontWeight: "600" }}>Nb. Panneaux</p>
+                              <p style={{ fontSize: "14px", color: "#1A202C", fontWeight: "500" }}>{r.client.num_panels || "--"}</p>
+                            </div>
+                            <div>
+                              <p style={{ fontSize: "11px", color: "#6B7280", marginBottom: "2px", fontWeight: "600" }}>Préf. Alerte</p>
+                              <p style={{ fontSize: "14px", color: "#1A202C", fontWeight: "500" }}>{ALERT_LABELS[r.client.alert_preference] || "--"}</p>
+                            </div>
+                            <div>
+                              <p style={{ fontSize: "11px", color: "#6B7280", marginBottom: "2px", fontWeight: "600" }}>FusionSolar ID</p>
+                              <p style={{ fontSize: "14px", color: "#1A202C", fontWeight: "500", fontFamily: "monospace" }}>{r.client.fusionsolar_username || "--"}</p>
+                            </div>
+                            <div>
+                              <p style={{ fontSize: "11px", color: "#6B7280", marginBottom: "2px", fontWeight: "600" }}>FusionSolar MDP</p>
+                              <p style={{ fontSize: "14px", color: "#1A202C", fontWeight: "500", fontFamily: "monospace" }}>{r.client.fusionsolar_password ? "••••••••" : "--"}</p>
+                            </div>
+                            <div>
+                              <p style={{ fontSize: "11px", color: "#6B7280", marginBottom: "2px", fontWeight: "600" }}>Inscrit le</p>
+                              <p style={{ fontSize: "14px", color: "#1A202C", fontWeight: "500" }}>{r.client.created_at ? new Date(r.client.created_at).toLocaleDateString("fr-FR") : "--"}</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

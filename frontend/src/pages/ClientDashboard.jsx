@@ -3,8 +3,9 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import SoilingGauge from "../components/SoilingGauge";
-import { Home, BarChart3, Bell, Settings, LogOut, RefreshCw, Sun, Zap, Plug, Coins, Leaf, Thermometer, AlertTriangle, Flame, Radio, CheckCircle, Wrench, Send, Clock, CalendarDays, ChevronDown, ChevronUp, ClipboardList, MapPin, Users, ArrowRight, Plus } from "lucide-react";
+import { Home, BarChart3, Bell, Settings, LogOut, RefreshCw, Sun, Zap, Plug, Coins, Leaf, Thermometer, AlertTriangle, Flame, Radio, CheckCircle, Wrench, Send, Clock, CalendarDays, ChevronDown, ChevronUp, ClipboardList, MapPin, Users, ArrowRight, Plus, Lock, Eye, EyeOff } from "lucide-react";
 import Logo from "../components/Logo";
+
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
@@ -33,14 +34,14 @@ function useSettings() {
   return [s, upd];
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
+// â??â?? Shared styles â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 const card = { background: "#fff", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "1.25rem" };
 const sectionTitle = { fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "1rem" };
 const fieldLbl = { fontSize: "12px", color: "#6B7280", marginBottom: "4px" };
 const fieldVal = { fontSize: "15px", fontWeight: "500", color: "#1A202C" };
 const inputSty = { display: "block", width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #E2E8F0", borderRadius: "6px", fontSize: "14px", color: "#1A202C", background: "#F8FAFC", boxSizing: "border-box", outline: "none" };
 
-// ── Live pill (station name + clock + EN DIRECT) ──────────────────────────────
+// â??â?? Live pill (station name + clock + EN DIRECT) â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function LivePill({ stationName }) {
   const clock = useClock();
   const timeStr = clock.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -58,7 +59,7 @@ function LivePill({ stationName }) {
   );
 }
 
-// ── Page header ───────────────────────────────────────────────────────────────
+// â??â?? Page header â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function PageHeader({ title, stationName, right }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.5rem 2rem 1rem" }}>
@@ -68,7 +69,7 @@ function PageHeader({ title, stationName, right }) {
   );
 }
 
-// ── Toggle switch ─────────────────────────────────────────────────────────────
+// â??â?? Toggle switch â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function Toggle({ value, onChange }) {
   return (
     <div onClick={() => onChange(!value)} style={{ width: "44px", height: "24px", borderRadius: "999px", background: value ? "#3B82F6" : "#CBD5E0", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
@@ -77,7 +78,7 @@ function Toggle({ value, onChange }) {
   );
 }
 
-// ── Root dashboard ────────────────────────────────────────────────────────────
+// â??â?? Root dashboard â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 export default function ClientDashboard() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -139,7 +140,7 @@ export default function ClientDashboard() {
       `}</style>
       <div style={{ display: "flex", minHeight: "100vh" }}>
 
-        {/* ── Sidebar ── */}
+        {/* â??â?? Sidebar â??â?? */}
         <aside style={{ width: "220px", minHeight: "100vh", background: "#fff", borderRight: "1px solid #E2E8F0", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
           <div style={{ padding: "1.25rem 1.25rem 0.75rem", borderBottom: "1px solid #F1F5F9" }}>
             <Logo size="sm" color="#1A202C" />
@@ -173,20 +174,21 @@ export default function ClientDashboard() {
           </div>
         </aside>
 
-        {/* ── Main content ── */}
+        {/* â??â?? Main content â??â?? */}
         <main style={{ flex: 1, minHeight: "100vh", background: "#F0F4F8", overflowY: "auto" }}>
           {tab === "accueil"       && <AccueilTab  kpi={kpi} soiling={soiling} alarmCount={alarmCount} soilingAlerts={soilingAlerts} stationName={stationName} onAlertes={() => setTab("alertes")} />}
           {tab === "analyses"      && <AnalysesTab kpi={kpi} deviceKpi={deviceKpi} stations={stations} stationName={stationName} />}
           {tab === "alertes"       && <AlertesTab  stationName={stationName} stations={stations} soilingAlerts={soilingAlerts} onRequestIntervention={(alert) => { setAlertForIntervention(alert); setTab("interventions"); }} />}
           {tab === "interventions" && <InterventionsTab stationName={stationName} stations={stations} alertForIntervention={alertForIntervention} onClearAlert={() => setAlertForIntervention(null)} />}
-          {tab === "reglages"      && <ReglagesTab kpi={kpi} lastSync={lastSync} stationName={stationName} />}
+          {tab === "reglages"      && <ReglagesTab kpi={kpi} lastSync={lastSync} stationName={stationName} stations={stations} />}
         </main>
+
       </div>
     </>
   );
 }
 
-// ── Accueil Tab ───────────────────────────────────────────────────────────────
+// â??â?? Accueil Tab â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function AccueilTab({ kpi, soiling, alarmCount, soilingAlerts = [], stationName, onAlertes }) {
   const d = kpi?.data?.[0]?.dataItemMap || {};
   const dayEnergy    = d.day_power ?? null;
@@ -226,7 +228,7 @@ function AccueilTab({ kpi, soiling, alarmCount, soilingAlerts = [], stationName,
       <PageHeader title="Accueil" stationName={stationName} />
       <div style={{ flex: 1, padding: "0 1.5rem 1rem", display: "flex", flexDirection: "column", gap: "0.6rem", minHeight: 0 }}>
 
-        {/* Soiling alert banners — compact */}
+        {/* Soiling alert banners â?? compact */}
         {activeAlerts.map(a => {
           const isCritique = a.severity === "critique";
           return (
@@ -331,7 +333,7 @@ function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
       <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151" }}>{top} kW</span>
       <div style={{ width: "100%", display: "flex", alignItems: "center" }}>
         <div style={{ flex: 1, height: "2px", background: "#CBD5E0" }} />
-        <span style={{ color: "#CBD5E0", fontSize: "10px", marginLeft: "1px" }}>▶</span>
+        <span style={{ color: "#CBD5E0", fontSize: "10px", marginLeft: "1px" }}>â?¶</span>
       </div>
       <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151" }}>{bottom} kW</span>
     </div>
@@ -339,7 +341,7 @@ function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
 
   const BiArrow = ({ toGrid, fromGrid }) => (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "0 4px" }}>
-      {/* Maison → Réseau (injection) */}
+      {/* Maison â?? Réseau (injection) */}
       <div style={{ width: "100%", display: "flex", alignItems: "center", gap: "4px" }}>
         <span style={{ fontSize: "11px", fontWeight: "600", color: "#16A34A", whiteSpace: "nowrap" }}>{toGrid} kW</span>
         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
@@ -347,7 +349,7 @@ function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
           <span style={{ color: "#16A34A", fontSize: "10px", marginLeft: "1px" }}>&#9654;</span>
         </div>
       </div>
-      {/* Réseau → Maison (consommation) */}
+      {/* Réseau â?? Maison (consommation) */}
       <div style={{ width: "100%", display: "flex", alignItems: "center", gap: "4px" }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
           <span style={{ color: "#6366F1", fontSize: "10px", marginRight: "1px" }}>&#9664;</span>
@@ -369,7 +371,7 @@ function EnergyFlow({ power, dayEnergy, homeEnergy, gridPower, dayGrid }) {
   );
 }
 
-// ── Demo chart data generator (client-side fallback) ─────────────────────────
+// â??â?? Demo chart data generator (client-side fallback) â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function generateDemoChart(period) {
   const now = new Date();
   const yr = now.getFullYear();
@@ -398,7 +400,7 @@ function generateDemoTemp() {
   return daytime ? Math.round((38 + Math.random() * 30) * 10) / 10 : Math.round((20 + Math.random() * 18) * 10) / 10;
 }
 
-// ── Analyses Tab ──────────────────────────────────────────────────────────────
+// â??â?? Analyses Tab â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
   const [period, setPeriod] = useState("mois");
   const [mode, setMode]     = useState("production");
@@ -417,7 +419,7 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
 
   const stationCode = stations[0]?.station_code;
 
-  // Load chart data — try API first, fallback to demo generation
+  // Load chart data â?? try API first, fallback to demo generation
   useEffect(() => {
     if (!stationCode) return;
     let cancelled = false;
@@ -464,7 +466,7 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
       setLoading(false);
     });
 
-    // Refresh every 10s — only regenerates demo data locally (no API spam)
+    // Refresh every 10s â?? only regenerates demo data locally (no API spam)
     const iv = setInterval(() => {
       if (!cancelled) {
         setChartData(generateDemoChart(period));
@@ -499,7 +501,6 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
       } />
 
       <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-
         {/* Chart + side stats */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: "1rem" }}>
 
@@ -578,7 +579,7 @@ function DetailCard({ icon, label, value, sub }) {
   );
 }
 
-// ── Intervention status helpers ───────────────────────────────────────────────
+// â??â?? Intervention status helpers â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 const IV_STATUS = {
   en_attente: { label: "En attente", dot: "#94A3B8", text: "#475569", bg: "#F8FAFC" },
   acceptee:   { label: "Acceptée",   dot: "#3B82F6", text: "#1D4ED8", bg: "#EFF6FF" },
@@ -596,7 +597,7 @@ const IV_PRIO = {
 };
 const SEV_TO_PRIO = { 1: "critique", 2: "haute", 3: "normale", 4: "basse" };
 
-// ── Alertes Tab ───────────────────────────────────────────────────────────────
+// â??â?? Alertes Tab â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 const SOIL_SEV = {
   critique: { label: "Critique", dot: "#DC2626", text: "#991B1B", bg: "#FEF2F2", border: "#FECACA" },
   attention: { label: "Attention", dot: "#F59E0B", text: "#92400E", bg: "#FFFBEB", border: "#FED7AA" },
@@ -619,7 +620,7 @@ function AlertesTab({ stationName, stations, soilingAlerts = [], onRequestInterv
       <PageHeader title="Alertes" stationName={stationName} />
       <div style={{ padding: "0 1.5rem 2rem" }}>
 
-        {/* ── Soiling alerts section ── */}
+        {/* â??â?? Soiling alerts section â??â?? */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "1rem", flexWrap: "wrap" }}>
           <p style={{ color: "#4B5563", fontSize: "15px" }}>
             Total: <strong>{soilingAlerts.length}</strong> alerte{soilingAlerts.length !== 1 ? "s" : ""}
@@ -644,7 +645,7 @@ function AlertesTab({ stationName, stations, soilingAlerts = [], onRequestInterv
           )}
         </div>
 
-        {/* Filter tabs — segmented control */}
+        {/* Filter tabs â?? segmented control */}
         <div style={{ display: "inline-flex", background: "#F1F5F9", borderRadius: "10px", padding: "3px", gap: "1px", marginBottom: "1.5rem" }}>
           {[["all","Toutes",soilingAlerts.length],["critique","Critique",counts.critique],["attention","Attention",counts.attention]].map(([key, lbl, cnt]) => {
             const sel = filter === key;
@@ -669,7 +670,7 @@ function AlertesTab({ stationName, stations, soilingAlerts = [], onRequestInterv
         {visible.length === 0 ? (
           <div style={{ ...card, textAlign: "center", padding: "2.5rem", color: "#16A34A" }}>
             <p style={{ fontSize: "1.1rem", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}><CheckCircle size={18} /> Panneaux propres</p>
-            <p style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>Aucun encrassement détecté — votre installation fonctionne normalement</p>
+            <p style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>Aucun encrassement détecté â?? votre installation fonctionne normalement</p>
           </div>
         ) : visible.map(a => {
           const sev  = SOIL_SEV[a.severity] || SOIL_SEV.attention;
@@ -749,7 +750,7 @@ function AlertesTab({ stationName, stations, soilingAlerts = [], onRequestInterv
   );
 }
 
-// ── Demo teams ───────────────────────────────────────────────────────────────
+// â??â?? Demo teams â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 const DEMO_TEAMS = [
   { id: 1, name: "Équipe Casablanca Centre",  city: "Casablanca", distance: "12 km", eta: "~30 min", rating: 4.8, jobs: 142, available: true },
   { id: 2, name: "Équipe Mohammedia",         city: "Mohammedia", distance: "28 km", eta: "~45 min", rating: 4.6, jobs: 89,  available: true },
@@ -757,7 +758,7 @@ const DEMO_TEAMS = [
   { id: 4, name: "Équipe Berrechid",          city: "Berrechid",  distance: "52 km", eta: "~1h 10",  rating: 4.5, jobs: 67,  available: true },
 ];
 
-// ── Interventions Tab ─────────────────────────────────────────────────────────
+// â??â?? Interventions Tab â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
 function InterventionsTab({ stationName, stations, alertForIntervention, onClearAlert }) {
   const [interventions, setInterventions] = useState([]);
   const [loading, setLoading]             = useState(true);
@@ -772,7 +773,7 @@ function InterventionsTab({ stationName, stations, alertForIntervention, onClear
   const [formSending, setFormSending] = useState(false);
   const [formSuccess, setFormSuccess] = useState(null);
 
-  // Alert context — auto-open form when redirected from AlertesTab
+  // Alert context â?? auto-open form when redirected from AlertesTab
   const alertCtx = alertForIntervention;
   const autoPriority = alertCtx ? (alertCtx.severity === "critique" ? "critique" : "haute") : "normale";
 
@@ -845,7 +846,7 @@ function InterventionsTab({ stationName, stations, alertForIntervention, onClear
       <PageHeader title="Interventions" stationName={stationName} />
       <div style={{ padding: "0 1.5rem 2rem" }}>
 
-        {/* Summary counters — clickable filters */}
+        {/* Summary counters â?? clickable filters */}
         <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem" }}>
           {[
             { key: "pending", label: "En attente", count: counts.pending, dot: "#F59E0B", text: "#92400E", bg: "#FFFBEB" },
@@ -885,7 +886,7 @@ function InterventionsTab({ stationName, stations, alertForIntervention, onClear
           </button>
         )}
 
-        {/* ── New intervention form ── */}
+        {/* â??â?? New intervention form â??â?? */}
         {showForm && formSuccess === null && (
           <div style={{ ...card, marginBottom: "1.25rem", border: "2px solid #6366F1", padding: "1.5rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
@@ -1109,13 +1110,177 @@ function InterventionsTab({ stationName, stations, alertForIntervention, onClear
   );
 }
 
-// ── Réglages Tab ──────────────────────────────────────────────────────────────
-function ReglagesTab({ kpi, lastSync, stationName }) {
+// â??â?? WhatsApp Registration Section â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+const WA_ICON = "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z";
+
+function WhatsAppSection({ phone: savedPhone }) {
+  const [phone, setPhone] = useState(savedPhone || "");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState({ type: "", text: "" });
+  const [step, setStep] = useState(savedPhone ? 2 : 1); // 1 = join sandbox, 2 = enter number
+  const isRegistered = !!savedPhone;
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    const cleaned = phone.replace(/\s/g, "");
+    if (!cleaned) { setMsg({ type: "error", text: "Veuillez entrer votre numéro WhatsApp" }); return; }
+    setLoading(true); setMsg({ type: "", text: "" });
+    try {
+      const res = await api.post("/auth/whatsapp-register", { phone: cleaned });
+      setMsg({ type: "success", text: res.data.message });
+    } catch (err) {
+      setMsg({ type: "error", text: err.response?.data?.detail || "Erreur lors de l'enregistrement" });
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "10px", padding: "1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "1rem" }}>
+        <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#25D366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d={WA_ICON}/></svg>
+        </div>
+        <div>
+          <p style={{ fontSize: "14px", fontWeight: "600", color: "#1A202C", margin: 0 }}>Assistant SolarAI sur WhatsApp</p>
+          <p style={{ fontSize: "12px", color: "#6B7280", margin: "2px 0 0" }}>
+            Recevez vos alertes et consultez vos données solaires directement sur WhatsApp
+          </p>
+        </div>
+      </div>
+
+      {msg.text && (
+        <div style={{
+          padding: "0.5rem 0.75rem", borderRadius: "6px", fontSize: "13px", marginBottom: "0.75rem",
+          background: msg.type === "success" ? "#DCFCE7" : "#FEF2F2",
+          border: `1px solid ${msg.type === "success" ? "#86EFAC" : "#FECACA"}`,
+          color: msg.type === "success" ? "#16A34A" : "#DC2626",
+        }}>{msg.text}</div>
+      )}
+
+      {/* Step 1: Join sandbox */}
+      {step === 1 && !isRegistered && (
+        <div style={{ marginBottom: "1rem" }}>
+          <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", padding: "1rem", marginBottom: "0.75rem" }}>
+            <p style={{ fontSize: "13px", fontWeight: "600", color: "#374151", margin: "0 0 8px" }}>
+              Étape 1 : Activez le service WhatsApp
+            </p>
+            <p style={{ fontSize: "13px", color: "#6B7280", margin: "0 0 10px", lineHeight: 1.5 }}>
+              Avant de recevoir les alertes, vous devez d'abord activer le service en envoyant un message sur WhatsApp :
+            </p>
+            <ol style={{ fontSize: "13px", color: "#374151", margin: 0, paddingLeft: "1.25rem", lineHeight: 1.8 }}>
+              <li>Ouvrez WhatsApp sur votre téléphone</li>
+              <li>Envoyez le message <strong style={{ fontFamily: "monospace", background: "#F3F4F6", padding: "2px 6px", borderRadius: "4px" }}>join</strong> au numéro <strong style={{ fontFamily: "monospace", background: "#F3F4F6", padding: "2px 6px", borderRadius: "4px" }}>+1 415 523 8886</strong></li>
+              <li>Attendez la confirmation, puis cliquez sur "Suivant" ci-dessous</li>
+            </ol>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <a href="https://wa.me/14155238886?text=join" target="_blank" rel="noopener noreferrer"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 20px",
+                background: "#25D366", color: "#fff", border: "none", borderRadius: "8px",
+                fontSize: "14px", fontWeight: "600", cursor: "pointer", textDecoration: "none",
+              }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d={WA_ICON}/></svg>
+              Ouvrir WhatsApp
+            </a>
+            <button type="button" onClick={() => setStep(2)} style={{
+              padding: "10px 20px", background: "#fff", border: "1px solid #BBF7D0", borderRadius: "8px",
+              fontSize: "14px", fontWeight: "600", color: "#16A34A", cursor: "pointer",
+            }}>
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Enter phone number */}
+      {(step === 2 || isRegistered) && (
+        <>
+          {!isRegistered && (
+            <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "0.75rem" }}>
+              <p style={{ fontSize: "13px", fontWeight: "600", color: "#374151", margin: "0 0 4px" }}>
+                Étape 2 : Entrez votre numéro WhatsApp
+              </p>
+              <p style={{ fontSize: "12px", color: "#6B7280", margin: 0 }}>
+                Entrez le même numéro que vous avez utilisé pour envoyer "join".
+              </p>
+            </div>
+          )}
+          <form onSubmit={handleRegister} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ position: "relative", flex: 1, maxWidth: "320px" }}>
+              <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "14px", color: "#6B7280" }}>+</span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="212600000001"
+                style={{
+                  width: "100%", padding: "10px 12px 10px 26px", border: "1px solid #BBF7D0", borderRadius: "8px",
+                  fontSize: "14px", color: "#1A202C", background: "#fff", outline: "none", boxSizing: "border-box",
+                  fontFamily: "monospace", letterSpacing: "0.5px",
+                }}
+              />
+            </div>
+            <button type="submit" disabled={loading} style={{
+              display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 20px",
+              background: "#25D366", color: "#fff", border: "none", borderRadius: "8px",
+              fontSize: "14px", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap",
+              opacity: loading ? 0.7 : 1,
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d={WA_ICON}/></svg>
+              {loading ? "Envoi..." : isRegistered ? "Mettre à jour" : "Activer WhatsApp"}
+            </button>
+          </form>
+
+          {!isRegistered && step === 2 && (
+            <button type="button" onClick={() => setStep(1)} style={{
+              marginTop: "8px", background: "none", border: "none", color: "#6B7280", fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline",
+            }}>
+              Retour à l'étape 1
+            </button>
+          )}
+        </>
+      )}
+
+      {isRegistered && (
+        <p style={{ fontSize: "12px", color: "#16A34A", marginTop: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+          <CheckCircle size={14} /> Numéro enregistré : {savedPhone}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// â??â?? Réglages Tab â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??â??
+function ReglagesTab({ kpi, lastSync, stationName, stations }) {
   const { user } = useAuth();
   const [settings, upd] = useSettings();
   const d = kpi?.data?.[0]?.dataItemMap || {};
-  const capacity  = d.installed_capacity ?? settings.capacity ?? "--";
+  // installed_capacity: try realtime KPI first, then station list metadata, then local settings
+  const capacity = d.installed_capacity ?? stations?.[0]?.installed_capacity ?? settings.capacity ?? "--";
   const syncAgo   = lastSync ? Math.round((Date.now() - lastSync) / 60000) : null;
+
+  // Change password state
+  const [pwForm, setPwForm] = useState({ current: "", newPw: "", confirm: "" });
+  const [pwShow, setPwShow] = useState(false);
+  const [pwMsg, setPwMsg]   = useState({ type: "", text: "" });
+  const [pwLoading, setPwLoading] = useState(false);
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    if (pwForm.newPw.length < 6) { setPwMsg({ type: "error", text: "Le nouveau mot de passe doit contenir au moins 6 caracteres" }); return; }
+    if (pwForm.newPw !== pwForm.confirm) { setPwMsg({ type: "error", text: "Les mots de passe ne correspondent pas" }); return; }
+    setPwLoading(true); setPwMsg({ type: "", text: "" });
+    try {
+      await api.post("/auth/change-password", { current_password: pwForm.current, new_password: pwForm.newPw });
+      setPwMsg({ type: "success", text: "Mot de passe modifié avec succès !" });
+      setPwForm({ current: "", newPw: "", confirm: "" });
+    } catch (err) {
+      setPwMsg({ type: "error", text: err.response?.data?.detail || "Erreur lors du changement de mot de passe" });
+    } finally { setPwLoading(false); }
+  }
+
+  const INSTALL_LABELS = { residentielle: "Résidentielle", commerciale: "Commerciale", industrielle: "Industrielle" };
+  const ALERT_LABELS = { email: "Email", whatsapp: "WhatsApp", both: "Email + WhatsApp" };
 
   return (
     <div>
@@ -1125,11 +1290,60 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
         {/* Profil */}
         <div style={card}>
           <p style={sectionTitle}>Profil</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1.5rem" }}>
             <div><p style={fieldLbl}>Nom Complet</p><p style={fieldVal}>{user?.full_name || "Client"}</p></div>
-            <div><p style={fieldLbl}>Ville</p><p style={fieldVal}>{settings.location || "Maroc"}</p></div>
-            <div><p style={fieldLbl}>Capacité installée</p><p style={fieldVal}>{capacity !== "--" ? `${capacity} kWc` : "--"}</p></div>
+            <div><p style={fieldLbl}>Email</p><p style={fieldVal}>{user?.email || "--"}</p></div>
+            <div><p style={fieldLbl}>Téléphone</p><p style={fieldVal}>{user?.phone || "--"}</p></div>
+            <div><p style={fieldLbl}>Type d'installation</p><p style={fieldVal}>{INSTALL_LABELS[user?.installation_type] || "--"}</p></div>
+            <div><p style={fieldLbl}>Nombre de panneaux</p><p style={fieldVal}>{user?.num_panels || "--"}</p></div>
+            <div><p style={fieldLbl}>Préférence d'alerte</p><p style={fieldVal}>{ALERT_LABELS[user?.alert_preference] || "--"}</p></div>
           </div>
+        </div>
+
+        {/* Change Password */}
+        <div style={card}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1rem" }}>
+            <Lock size={16} color="#6366F1" />
+            <p style={{ ...sectionTitle, marginBottom: 0 }}>Changer le mot de passe</p>
+          </div>
+          {pwMsg.text && (
+            <div style={{
+              padding: "0.5rem 0.75rem", borderRadius: "6px", fontSize: "13px", marginBottom: "0.75rem",
+              background: pwMsg.type === "success" ? "#F0FDF4" : "#FEF2F2",
+              border: `1px solid ${pwMsg.type === "success" ? "#BBF7D0" : "#FECACA"}`,
+              color: pwMsg.type === "success" ? "#16A34A" : "#DC2626",
+            }}>{pwMsg.text}</div>
+          )}
+          <form onSubmit={handleChangePassword} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", alignItems: "end" }}>
+            <div>
+              <p style={fieldLbl}>Mot de passe actuel</p>
+              <div style={{ position: "relative" }}>
+                <input style={{ ...inputSty, paddingRight: "2.5rem" }} type={pwShow ? "text" : "password"} placeholder="â?¢â?¢â?¢â?¢â?¢â?¢â?¢â?¢"
+                  value={pwForm.current} onChange={e => setPwForm({ ...pwForm, current: e.target.value })} required />
+                <button type="button" onClick={() => setPwShow(p => !p)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", padding: 0, lineHeight: 1 }}>
+                  {pwShow ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <p style={fieldLbl}>Nouveau mot de passe</p>
+              <input style={inputSty} type={pwShow ? "text" : "password"} placeholder="Min. 6 caracteres"
+                value={pwForm.newPw} onChange={e => setPwForm({ ...pwForm, newPw: e.target.value })} required />
+            </div>
+            <div>
+              <p style={fieldLbl}>Confirmer</p>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input style={{ ...inputSty, flex: 1 }} type={pwShow ? "text" : "password"} placeholder="Répéter"
+                  value={pwForm.confirm} onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })} required />
+                <button type="submit" disabled={pwLoading} style={{
+                  padding: "0.5rem 1rem", background: "#6366F1", color: "#fff", border: "none",
+                  borderRadius: "6px", fontSize: "13px", fontWeight: "600", cursor: pwLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap",
+                }}>
+                  {pwLoading ? "..." : "Modifier"}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
 
         {/* Installation */}
@@ -1151,7 +1365,7 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
           </div>
         </div>
 
-        {/* Soiling thresholds — info only */}
+        {/* Soiling thresholds â?? info only */}
         <div style={card}>
           <p style={sectionTitle}>Seuils d'Alerte d'Encrassement</p>
           <div style={{ display: "flex", gap: "1rem" }}>
@@ -1161,7 +1375,7 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
             </div>
             <div style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
               <p style={{ fontSize: "13px", fontWeight: 600, color: "#D97706", margin: 0 }}>Attention</p>
-              <p style={{ fontSize: "12px", color: "#6B7280", margin: "4px 0 0" }}>60% – 85%</p>
+              <p style={{ fontSize: "12px", color: "#6B7280", margin: "4px 0 0" }}>60% â?? 85%</p>
             </div>
             <div style={{ flex: 1, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
               <p style={{ fontSize: "13px", fontWeight: 600, color: "#DC2626", margin: 0 }}>Critique</p>
@@ -1176,7 +1390,7 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
         {/* Notifications */}
         <div style={card}>
           <p style={sectionTitle}>Préférences de Notification</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
             {[
               ["soilingAlerts",  "Alertes d'encrassement"],
               ["emailReports",   "Rapports d'email automatiques"],
@@ -1189,6 +1403,9 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
               </div>
             ))}
           </div>
+
+          {/* WhatsApp Bot */}
+          <WhatsAppSection phone={user?.phone} />
         </div>
 
         {/* FusionSolar + App Prefs */}
@@ -1197,9 +1414,9 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
             <p style={sectionTitle}>Connexion API FusionSolar</p>
             <p style={{ fontSize: "13px", marginBottom: "4px" }}>Statut: <span style={{ color: "#16A34A", fontWeight: "600" }}>Connecté</span></p>
             <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "4px" }}>
-              Dernière synchro: {syncAgo != null ? `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}` : "—"}
+              Dernière synchro: {syncAgo != null ? `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}` : "?"}
             </p>
-            <p style={{ fontSize: "13px", color: "#6B7280" }}>Crédentiels: <span style={{ fontFamily: "monospace" }}>••••••••</span></p>
+            <p style={{ fontSize: "13px", color: "#6B7280" }}>Crédentiels: <span style={{ fontFamily: "monospace" }}>â?¢â?¢â?¢â?¢â?¢â?¢â?¢â?¢</span></p>
           </div>
           <div style={card}>
             <p style={sectionTitle}>App Préférences</p>
@@ -1223,3 +1440,4 @@ function ReglagesTab({ kpi, lastSync, stationName }) {
     </div>
   );
 }
+

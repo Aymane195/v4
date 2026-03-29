@@ -34,14 +34,13 @@ def _solar_factor() -> float:
 # ── KPI generators ────────────────────────────────────────────────────────────
 
 def realtime_kpi() -> dict:
-    # Demo always shows active production (min factor 0.35) so live updates are visible at any hour
-    factor   = max(0.35, _solar_factor())
+    factor   = _solar_factor()   # 0 at night (20h–6h), bell curve during the day
     capacity = round(random.uniform(9, 14), 1)          # kWp installed
-    power    = round(capacity * factor * random.uniform(0.82, 0.98), 2)
-    elapsed  = max(3, datetime.now().hour - 6)          # at least 3h elapsed for realistic day energy
-    day_pwr  = round(power * elapsed * 0.6 * random.uniform(0.9, 1.1), 2)
+    power    = round(capacity * factor * random.uniform(0.82, 0.98), 2) if factor > 0 else 0.0
+    elapsed  = max(3, datetime.now().hour - 6)          # hours since sunrise for day energy
+    day_pwr  = round(power * elapsed * 0.6 * random.uniform(0.9, 1.1), 2) if factor > 0 else round(random.uniform(15, 45), 2)
     total    = round(random.uniform(9000, 16000), 2)
-    radiation = round(1000 * factor * random.uniform(0.78, 1.02), 1)
+    radiation = round(1000 * factor * random.uniform(0.78, 1.02), 1) if factor > 0 else 0.0
 
     return {
         "success": True,
@@ -86,31 +85,23 @@ def monthly_kpi(month_str: str) -> dict:
     return {"success": True, "data": [{"stationCode": DEMO_STATION_CODE, "dataItemMap": {"month_power": month_pwr}}]}
 
 
-def soiling() -> dict:
-    """Random soiling prediction — different state on each call for dev testing."""
-    # Pick from 3 ranges: clean, attention, critique
-    _RANGES = [(0.05, 0.12), (0.18, 0.35), (0.42, 0.50)]
-    lo, hi = random.choice(_RANGES)
-    index = round(random.uniform(lo, hi), 4)
-    if index < 0.15:
-        status, rec = "clean", "Panneaux propres. Aucune action requise."
-        alert_level, confidence = "NORMAL", 95
-    elif index < 0.40:
-        status, rec = "attention", "Encrassement modéré détecté. Nettoyage recommandé cette semaine."
-        alert_level = "ALERTE" if index >= 0.20 else "AVERTISSEMENT"
-        confidence = 80
-    else:
-        status, rec = "critique", "Encrassement critique. Nettoyage immédiat recommandé."
-        alert_level, confidence = "CRITIQUE", 80
-    return {
-        "soiling_index": index,
-        "energy_loss_percent": round(index * 100, 2),
-        "status": status,
-        "recommendation": rec,
-        "confidence": confidence,
-        "alert_level": alert_level,
-        "diagnostic": "Données de démonstration — moteur hybride simulé",
-    }
+def soiling(days_since_last_cleaning: int = 30) -> dict:
+    """Real model prediction using typical Morocco demo parameters."""
+    from app.services.soiling import predict_soiling
+    dust_cycle = abs(math.sin(datetime.utcnow().timetuple().tm_yday / 30.0 * math.pi))
+    days_since_rain = int(5 + 25 * dust_cycle)
+    power_ratio = round(max(0.50, 0.92 - 0.30 * dust_cycle), 3)
+    return predict_soiling({
+        "irradiation_kwh_m2":       5.5,
+        "temp_air_c":               28.0,
+        "humidity_pct":             45.0,
+        "wind_speed_ms":            4.5,
+        "precipitation_mm":         0.0,
+        "days_since_last_rain":     days_since_rain,
+        "days_since_last_cleaning": days_since_last_cleaning,
+        "installed_capacity_kwp":   10.0,
+        "power_ratio":              power_ratio,
+    })
 
 
 _ALARM_POOL = [

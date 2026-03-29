@@ -9,9 +9,14 @@ _CACHE_TTL = 3600  # 1 hour
 _cache: dict = {}  # { (lat_rounded, lng_rounded): (timestamp, data) }
 
 
-def get_weather(lat: float, lng: float) -> dict:
+def get_weather(lat: float, lng: float, yesterday: bool = False) -> dict:
     """
-    Fetch today's weather from Open-Meteo (free, no API key).
+    Fetch weather from Open-Meteo (free, no API key).
+
+    When yesterday=False (default): returns today's values.
+    When yesterday=True: returns yesterday's complete daily values — used by
+    the soiling model so the prediction is based on a full solar day
+    (stable 23h→23h cycle, no intraday fluctuation).
 
     Returns dict with keys matching soiling model feature names:
         irradiation_kwh_m2, temp_air_c, humidity_pct,
@@ -20,7 +25,7 @@ def get_weather(lat: float, lng: float) -> dict:
     Returns {} on any network/parse error — caller falls back to defaults.
     """
     # Round to 2 decimal places for cache key (~1 km resolution)
-    key = (round(lat, 2), round(lng, 2))
+    key = (round(lat, 2), round(lng, 2), yesterday)
     cached = _cache.get(key)
     if cached and (time.time() - cached[0]) < _CACHE_TTL:
         return cached[1]
@@ -47,19 +52,27 @@ def get_weather(lat: float, lng: float) -> dict:
 
         daily = data.get("daily", {})
 
-        # Each key maps to a list ordered oldest → newest; today is the last entry
-        def last(key_name):
+        # Each key maps to a list ordered oldest → newest.
+        # With past_days=7 + forecast_days=1 → 8 entries: [day-7 … day-1, today]
+        # yesterday mode: use second-to-last entry (complete solar day)
+        # today mode:     use last entry (partial / in-progress day)
+        idx = -2 if yesterday else -1
+
+        def pick(key_name):
             vals = daily.get(key_name, [])
-            return vals[-1] if vals else None
+            return vals[idx] if len(vals) >= abs(idx) else None
 
-        irradiation  = last("shortwave_radiation_sum")  # kWh/m²/day — matches training data
-        temp         = last("temperature_2m_mean")       # °C
-        humidity     = last("relative_humidity_2m_mean") # %
-        wind         = last("wind_speed_10m_max")        # m/s (max of day is a good proxy)
-        precip_today = last("precipitation_sum")         # mm
+        irradiation  = pick("shortwave_radiation_sum")  # kWh/m²/day — matches training data
+        temp         = pick("temperature_2m_mean")       # °C
+        humidity     = pick("relative_humidity_2m_mean") # %
+        wind         = pick("wind_speed_10m_max")        # m/s (max of day is a good proxy)
+        precip_today = pick("precipitation_sum")         # mm
 
-        # Calculate days since last rain from past 7 days + today
+        # Calculate days since last rain.
+        # In yesterday mode, exclude today so the count is relative to yesterday.
         precip_series = daily.get("precipitation_sum", [])
+        if yesterday:
+            precip_series = precip_series[:-1]  # drop today — reference day is yesterday
         days_since_rain = 7  # default if nothing found
         for i, p in enumerate(reversed(precip_series)):
             if p is not None and p > 0.1:

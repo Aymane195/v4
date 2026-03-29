@@ -7,9 +7,13 @@ from app.services.fusionsolar import client as fs
 from app.services import demo as demo_svc
 from app.services.email import send_critique_soiling_alert
 from app.services import weather as weather_svc
+from app.services.validation import apply_realtime_correction, is_nighttime
 import calendar
 import datetime
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/client", tags=["Client"])
 
@@ -18,6 +22,12 @@ _require_client = require_role("client")
 # Track which (user_id, station_code) pairs already received a critique email
 # this server session (resets on restart — acceptable for this app's scale).
 _critique_email_sent: set[tuple[int, str]] = set()
+
+# Daily soiling cache: one prediction per station per solar day.
+# Recomputed after 20:00 local (solar day complete), stable the rest of the day.
+# { station_code: {"result": dict, "date": "YYYY-MM-DD", "day_power": float} }
+_soiling_daily_cache: dict[str, dict] = {}
+_SOILING_REFRESH_HOUR = 20  # local hour (Morocco UTC+1) — production is zero by then
 
 
 def _get_station_codes(current_user: User, db: Session) -> list[str]:
@@ -40,7 +50,36 @@ def get_my_stations(
     db: Session = Depends(get_db),
 ):
     stations = db.query(ClientStation).filter(ClientStation.client_id == current_user.id).all()
-    return [{"station_code": s.station_code, "station_name": s.station_name} for s in stations]
+
+    # Enrich with capacity from FusionSolar station list (cached 5 min — zero extra API calls)
+    fs_meta: dict = {}
+    try:
+        sl = fs.get_station_list()
+        for s in (sl.get("data") or []):
+            code = s.get("stationCode", "")
+            if code:
+                cap = (
+                    s.get("capacity")
+                    or s.get("installedCapacity")
+                    or s.get("installed_capacity")
+                    or s.get("installedPower")
+                    or s.get("dcCapacity")
+                )
+                fs_meta[code] = {
+                    "installed_capacity": float(cap) if cap is not None else None,
+                    "station_name_fs":    s.get("stationName"),
+                    "address":            s.get("stationAddr"),
+                }
+    except Exception:
+        pass
+
+    result = []
+    for s in stations:
+        entry = {"station_code": s.station_code, "station_name": s.station_name}
+        if s.station_code in fs_meta:
+            entry.update(fs_meta[s.station_code])
+        result.append(entry)
+    return result
 
 
 @router.get("/kpi/realtime")
@@ -51,7 +90,20 @@ def get_realtime_kpi(
     codes = _get_station_codes(current_user, db)
     if any(demo_svc.is_demo(c) for c in codes):
         return demo_svc.realtime_kpi()
-    return _handle(fs.get_station_real_kpi, codes)
+    raw = _handle(fs.get_station_real_kpi_enriched, codes)
+
+    # Fallback: if station-level inverter_power = 0 during daytime, sum device-level KPIs.
+    # FusionSolar sometimes fails to aggregate station KPI even when inverters are running.
+    if not is_nighttime(datetime.datetime.utcnow()):
+        for entry in raw.get("data", []):
+            item_map = entry.get("dataItemMap", {})
+            if not item_map.get("inverter_power"):
+                code = entry.get("stationCode", "")
+                fallback = fs.get_station_power_from_devices(code)
+                if fallback is not None:
+                    item_map["inverter_power"] = fallback
+
+    return apply_realtime_correction(raw)
 
 
 @router.get("/kpi/daily")
@@ -151,19 +203,71 @@ def get_soiling_alerts(
     if any(demo_svc.is_demo(c) for c in codes):
         return [a for a in demo_svc.demo_soiling_alerts() if a["severity"] != "info"]
 
-    # Real clients: return current soiling reading as a single alert (if soiling detected)
+    # ── Daily soiling prediction (stable 23h→23h cycle) ──────────────────────
+    # Soiling is computed ONCE per solar day using the real-time KPI's accumulated
+    # day_power after 20:00 local (when production is complete). Before 20:00, the
+    # previous day's cached result is served — no intraday fluctuation.
+    now_utc = datetime.datetime.utcnow()
+    hour_local = (now_utc.hour + 1) % 24  # Morocco is UTC+1
+    today_str = (now_utc + datetime.timedelta(hours=1)).strftime("%Y-%m-%d")
+
     alerts = []
     for code in codes:
         try:
-            kpi_data = fs.get_station_real_kpi([code])
+            # Check if we have a valid cached result for today
+            cached = _soiling_daily_cache.get(code)
+            if cached:
+                # Serve cache if: already computed today, OR it's before refresh hour
+                if cached["date"] == today_str or hour_local < _SOILING_REFRESH_HOUR:
+                    result = cached["result"]
+                    capacity = cached.get("capacity", 10.0)
+                    logger.info("[soiling] station %s: serving cached result (date=%s, soiling=%.4f)",
+                                code, cached["date"], result["soiling_index"])
+                    # Build alert from cached result (skip if clean)
+                    if result["status"] == "clean":
+                        continue
+                    daily_loss = round(result["energy_loss_percent"] / 100 * capacity * 5.5 * 1.5, 1)
+                    title_map = {"attention": "Encrassement modéré détecté",
+                                 "critique": "Encrassement critique détecté — Soiling Index élevé"}
+                    alerts.append({
+                        "id": f"SA-{code[:8]}", "severity": result["status"],
+                        "status": "en_cours",
+                        "title": title_map.get(result["status"], "Alerte encrassement"),
+                        "soiling_index": result["soiling_index"],
+                        "energy_loss_percent": result["energy_loss_percent"],
+                        "daily_loss_dh": daily_loss,
+                        "recommendation": result["recommendation"],
+                        "confidence": result.get("confidence"),
+                        "alert_level": result.get("alert_level"),
+                        "diagnostic": result.get("diagnostic"),
+                        "created_at": cached.get("computed_at", now_utc.isoformat()),
+                        "resolved_at": None,
+                        "station_code": code, "station_name": code,
+                    })
+                    # Email logic for cached critiques handled at first computation
+                    continue
+
+            # ── Compute fresh prediction ─────────────────────────────────────
+            # Only compute if hour >= REFRESH_HOUR (solar day complete) or no cache exists
+            if hour_local < _SOILING_REFRESH_HOUR and cached:
+                continue  # too early and we already used cache above
+
+            kpi_data = fs.get_station_real_kpi_enriched([code])
             data_list = kpi_data.get("data", [])
             kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-            radiation   = kpi.get("radiation_intensity") or 0.0
-            inverter_pwr = kpi.get("inverter_power") or 0.0
-            capacity    = kpi.get("installed_capacity") or 1.0
+            capacity = kpi.get("installed_capacity") or 10.0
+            day_power = kpi.get("day_power")
 
-            # Look up last cleaning from interventions so the model knows how dirty panels likely are
+            logger.info("[soiling] station %s: computing fresh — hour_local=%d, day_power=%s, capacity=%s",
+                        code, hour_local, day_power, capacity)
+
+            # Guard: need real production data to predict
+            if not day_power:
+                logger.warning("[soiling] station %s: no day_power available, skipping", code)
+                continue
+
+            # Look up last cleaning
             last_clean = (
                 db.query(Intervention)
                 .filter(
@@ -176,27 +280,35 @@ def get_soiling_alerts(
                 .first()
             )
             days_since_cleaning = (
-                max(0, (datetime.datetime.utcnow() - last_clean.completed_date).days)
+                max(0, (now_utc - last_clean.completed_date).days)
                 if last_clean and last_clean.completed_date else 30
             )
 
             features = {
                 "installed_capacity_kwp":   capacity,
-                "p_theoretical_kwh":        capacity * (radiation / 1000.0) if radiation else None,
-                "p_real":                   inverter_pwr,
+                "day_power":                day_power,
                 "days_since_last_cleaning": days_since_cleaning,
             }
 
-            # Fetch real weather from Open-Meteo (replaces hardcoded defaults)
+            # Fetch today's weather (complete by evening)
             coords = fs.get_station_location(code)
             if coords:
                 features.update(weather_svc.get_weather(*coords))
             result = soiling_service.predict_soiling(features)
+
+            # Cache the result for this solar day
+            _soiling_daily_cache[code] = {
+                "result": result, "date": today_str,
+                "capacity": capacity, "computed_at": now_utc.isoformat(),
+            }
+            logger.info("[soiling] station %s: cached new prediction — soiling=%.4f (%s)",
+                        code, result["soiling_index"], result["status"])
             severity = result["status"]  # clean, attention, or critique
             if severity == "clean":
                 continue  # no alert when panels are clean
             title_map = {"attention": "Encrassement modéré détecté", "critique": "Encrassement critique détecté — Soiling Index élevé"}
-            daily_loss = round(result["energy_loss_percent"] * 0.15 * 50, 1)
+            # daily_loss: use real capacity so DH estimate is per-station accurate
+            daily_loss = round(result["energy_loss_percent"] / 100 * capacity * 5.5 * 1.5, 1)
             alerts.append({
                 "id": f"SA-{code[:8]}",
                 "severity": severity,

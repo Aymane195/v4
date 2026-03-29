@@ -27,3 +27,8 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Solar AI-Optimizer")
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+
+# Twilio / WhatsApp
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "")  # e.g. "whatsapp:+14155238886"
