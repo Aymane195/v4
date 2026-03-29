@@ -256,10 +256,13 @@ def get_soiling_alerts(
             data_list = kpi_data.get("data", [])
             kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-            capacity = kpi.get("installed_capacity") or 10.0
+            capacity = kpi.get("installed_capacity") or None
+            if not capacity:
+                capacity = fs.get_station_capacity(code)
+            capacity = float(capacity) if capacity else 10.0
             day_power = kpi.get("day_power")
 
-            logger.info("[soiling] station %s: computing fresh — hour_local=%d, day_power=%s, capacity=%s",
+            logger.info("[soiling] station %s: computing fresh — hour_local=%d, day_power=%s, capacity=%s kWp",
                         code, hour_local, day_power, capacity)
 
             # Guard: need real production data to predict

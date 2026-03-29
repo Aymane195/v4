@@ -83,10 +83,13 @@ def predict_for_station(
     data_list = kpi_data.get("data", [])
     kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-    capacity = kpi.get("installed_capacity") or 10.0
+    capacity = kpi.get("installed_capacity") or None
+    if not capacity:
+        capacity = fs.get_station_capacity(station_code)
+    capacity = float(capacity) if capacity else 10.0
     day_power = kpi.get("day_power")
 
-    logger.info("[soiling] station %s: computing — hour_local=%d, day_power=%s, capacity=%s",
+    logger.info("[soiling] station %s: computing — hour_local=%d, day_power=%s, capacity=%s kWp",
                 station_code, hour_local, day_power, capacity)
 
     features = {

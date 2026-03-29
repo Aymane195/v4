@@ -290,6 +290,42 @@ class FusionSolarClient:
             pass
         return None
 
+    def get_station_capacity(self, station_code: str) -> float | None:
+        """
+        Return installed capacity in kWp for a station from the station list.
+
+        Tries all known FusionSolar field names for capacity. Logs what it finds
+        so mismatches can be diagnosed. Returns None if station not found.
+        """
+        try:
+            data = self.get_station_list()
+            all_codes = [s.get("stationCode") for s in (data.get("data") or [])]
+            logger.info("[fusionsolar] get_station_capacity(%s): station list has %d stations, codes=%s",
+                        station_code, len(all_codes), all_codes)
+            for s in (data.get("data") or []):
+                if s.get("stationCode") == station_code:
+                    cap = (
+                        s.get("capacity")
+                        or s.get("installedCapacity")
+                        or s.get("installed_capacity")
+                        or s.get("installedPower")
+                        or s.get("dcCapacity")
+                        or s.get("systemSize")
+                    )
+                    logger.info("[fusionsolar] station %s found in list — capacity field values: "
+                                "capacity=%s installedCapacity=%s installed_capacity=%s "
+                                "installedPower=%s dcCapacity=%s → using %.4f",
+                                station_code,
+                                s.get("capacity"), s.get("installedCapacity"),
+                                s.get("installed_capacity"), s.get("installedPower"),
+                                s.get("dcCapacity"),
+                                float(cap) if cap is not None else 0.0)
+                    return float(cap) if cap is not None else None
+            logger.warning("[fusionsolar] station %s NOT found in station list (code mismatch?)", station_code)
+        except Exception as e:
+            logger.warning("[fusionsolar] get_station_capacity failed for %s: %s", station_code, e)
+        return None
+
     # ------------------------------------------------------------------
     # Domain discovery
     # ------------------------------------------------------------------
