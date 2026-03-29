@@ -140,6 +140,72 @@ def get_monthly_kpi(
     return [_handle(fs.get_kpi_station_month, code, collect_time) for code in codes]
 
 
+# Annual cache: { (user_id, year): (fetched_at_timestamp, data) }
+_annual_cache: dict[tuple, tuple] = {}
+_ANNUAL_CACHE_TTL = 3600  # 1 hour — monthly history never changes
+import time as _time
+
+
+@router.get("/kpi/annual")
+def get_annual_kpi(
+    year: int = Query(..., description="4-digit year, e.g. 2026"),
+    current_user: User = Depends(_require_client),
+    db: Session = Depends(get_db),
+):
+    """
+    Return all 12 months of KPI for the given year in a single call.
+    Fetches FusionSolar sequentially with 200ms delay between calls (avoids
+    rate-limiting from 12 parallel requests). Cached 1 hour on the backend.
+    Response: list of 12 items [{month: 1, month_power: 123.4}, ...]
+    """
+    codes = _get_station_codes(current_user, db)
+
+    # Demo path
+    if any(demo_svc.is_demo(c) for c in codes):
+        result = []
+        for m in range(1, 13):
+            date_str = f"{year}-{m:02d}"
+            try:
+                d = demo_svc.monthly_kpi(date_str)
+                mp = float((d[0] if isinstance(d, list) else d).get("dataItemMap", {}).get("month_power") or 0)
+            except Exception:
+                mp = 0.0
+            result.append({"month": m, "month_power": mp})
+        return result
+
+    # Serve from cache when fresh
+    cache_key = (current_user.id, year)
+    cached = _annual_cache.get(cache_key)
+    if cached:
+        fetched_at, data = cached
+        if _time.time() - fetched_at < _ANNUAL_CACHE_TTL:
+            logger.info("[annual] serving cached year %d for user %d", year, current_user.id)
+            return data
+
+    # Fetch 12 months sequentially — one request at a time to avoid rate limiting
+    logger.info("[annual] fetching year %d for user %d (12 sequential months)", year, current_user.id)
+    result = []
+    for m in range(1, 13):
+        date_str = f"{year}-{m:02d}"
+        month_power = 0.0
+        try:
+            dt = datetime.datetime.strptime(date_str + "-01", "%Y-%m-%d")
+            collect_time = int(calendar.timegm(dt.timetuple()) * 1000)
+            resp = fs.get_kpi_station_month(codes[0], collect_time)
+            data_list = resp.get("data") or []
+            item_map = data_list[0].get("dataItemMap", {}) if data_list else {}
+            month_power = float(item_map.get("month_power") or 0)
+            logger.info("[annual] month %s → %.1f kWh", date_str, month_power)
+        except Exception as e:
+            logger.warning("[annual] month %s failed: %s", date_str, e)
+        result.append({"month": m, "month_power": month_power})
+        _time.sleep(0.2)  # 200ms pause — keeps us well below FusionSolar's rate limit
+
+    _annual_cache[cache_key] = (_time.time(), result)
+    logger.info("[annual] cached year %d: total=%.1f kWh", year, sum(r["month_power"] for r in result))
+    return result
+
+
 @router.get("/kpi/devices")
 def get_device_kpi(
     current_user: User = Depends(_require_client),

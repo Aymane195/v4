@@ -439,18 +439,16 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
               .catch(() => ({ name: "", val: 0 }));
           }));
         } else if (period === "mois") {
-          data = await Promise.all(Array.from({ length: 12 }, (_, i) => {
-            const m = String(i + 1).padStart(2, "0");
-            return api.get(`/client/kpi/monthly?date=${yr}-${m}`)
-              .then(r => { const kp = Array.isArray(r.data) ? r.data[0] : r.data; return { name: MONTHS[i], val: kp?.data?.[0]?.dataItemMap?.month_power ?? 0 }; })
-              .catch(() => ({ name: MONTHS[i], val: 0 }));
-          }));
+          // Single call → backend fetches 12 months sequentially with 1h cache (avoids rate limiting)
+          const r = await api.get(`/client/kpi/annual?year=${yr}`);
+          data = (r.data || []).map((item, i) => ({ name: MONTHS[i], val: item.month_power || 0 }));
         } else {
+          // Année view: one call per year (3 requests, not 36)
           data = await Promise.all(Array.from({ length: 3 }, (_, i) => {
             const y = yr - 2 + i;
-            return api.get(`/client/kpi/monthly?date=${y}-06`)
-              .then(r => { const kp = Array.isArray(r.data) ? r.data[0] : r.data; return { name: String(y), val: (kp?.data?.[0]?.dataItemMap?.month_power ?? 0) * 12 }; })
-              .catch(() => ({ name: String(y), val: 0 }));
+            return api.get(`/client/kpi/annual?year=${y}`)
+              .then(r => { const total = (r.data || []).reduce((s, m) => s + (m.month_power || 0), 0); return { name: String(y), val: total }; })
+              .catch(() => ({ name: String(yr - 2 + i), val: 0 }));
           }));
         }
       } catch { data = []; }
@@ -460,26 +458,15 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
       return sum > 0 ? data : null; // null = API had no real data
     }
 
-    let iv = null;
     loadFromApi().then(apiData => {
       if (cancelled) return;
-      if (apiData) {
-        // Real FusionSolar data — set once, no auto-refresh (history doesn't change)
-        setChartData(apiData);
-      } else {
-        // No real data — use animated demo
-        setChartData(generateDemoChart(period));
-        iv = setInterval(() => {
-          if (!cancelled) {
-            setChartData(generateDemoChart(period));
-            setDemoTemp(generateDemoTemp());
-          }
-        }, 10000);
-      }
+      // Historical data never changes — set once and never refresh automatically.
+      // If API failed (apiData=null), show static zero bars, not random demo values.
+      setChartData(apiData || generateDemoChart(period).map(r => ({ ...r, val: 0 })));
       setLoading(false);
     });
 
-    return () => { cancelled = true; if (iv) clearInterval(iv); };
+    return () => { cancelled = true; };
   }, [period, stationCode]);
 
   const chartVals = mode === "economies" ? chartData.map(r => ({ ...r, val: Math.round(r.val * 1.5) })) : chartData;
