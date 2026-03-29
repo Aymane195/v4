@@ -8,12 +8,17 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import User, Intervention, InterventionType, InterventionStatus
 from datetime import datetime, timedelta
-import calendar
-import logging
+import logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/soiling", tags=["Soiling AI"])
+
+# Daily soiling cache shared with client.py: one result per station per solar day.
+# Recomputed after 20:00 local (solar day complete), stable the rest of the day.
+# { station_code: {"result": dict, "date": "YYYY-MM-DD", "capacity": float} }
+_soiling_daily_cache: dict[str, dict] = {}
+_SOILING_REFRESH_HOUR = 20  # Morocco local hour (UTC+1)
 
 
 def _days_since_last_cleaning(station_code: str, db: Session) -> int:
@@ -55,52 +60,34 @@ def predict_for_station(
         # Run real model with representative Morocco demo parameters
         return _predict_demo(station_code, db)
 
-    # Use YESTERDAY's complete daily KPI for a stable soiling index
-    # (full solar day, no intraday fluctuation from partial production).
+    # ── Daily soiling prediction (stable 23h→23h cycle) ──────────────────────
+    # Computed ONCE per solar day using real-time KPI's accumulated day_power
+    # after 20:00 local (production complete). Before 20:00, cached result served.
     now = datetime.utcnow()
-    yesterday = now - timedelta(days=1)
-    yest_start = datetime(yesterday.year, yesterday.month, yesterday.day)
-    yesterday_ts = int(calendar.timegm(yest_start.timetuple()) * 1000)
+    hour_local = (now.hour + 1) % 24  # Morocco UTC+1
+    today_str = (now + timedelta(hours=1)).strftime("%Y-%m-%d")
 
-    # Get installed_capacity from station list (cached 5 min)
-    capacity = 10.0
-    try:
-        sl = fs.get_station_list()
-        for s in (sl.get("data") or []):
-            if s.get("stationCode") == station_code:
-                cap = (s.get("capacity") or s.get("installedCapacity")
-                       or s.get("installed_capacity") or s.get("installedPower"))
-                if cap:
-                    capacity = float(cap)
-                break
-    except Exception:
-        pass
+    # Check cache first
+    cached = _soiling_daily_cache.get(station_code)
+    if cached:
+        if cached["date"] == today_str or hour_local < _SOILING_REFRESH_HOUR:
+            logger.info("[soiling] station %s: serving cached result (date=%s)", station_code, cached["date"])
+            return cached["result"]
 
-    # Fetch yesterday's COMPLETE daily production
+    # Too early and no cache yet — still compute (first request of the day)
     try:
-        daily_kpi = fs.get_kpi_station_day(station_code, yesterday_ts)
+        kpi_data = fs.get_station_real_kpi_enriched([station_code])
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    dm = ((daily_kpi.get("data") or [{}])[0]).get("dataItemMap", {})
+    data_list = kpi_data.get("data", [])
+    kpi = data_list[0].get("dataItemMap", {}) if data_list else {}
 
-    logger.info("[soiling] station %s daily KPI fields: %s", station_code, list(dm.keys()))
+    capacity = kpi.get("installed_capacity") or 10.0
+    day_power = kpi.get("day_power")
 
-    # Try every known field name for daily production (kWh)
-    day_power = None
-    for key in ("day_power", "inverter_power", "product_power",
-                "ongrid_power", "installed_power", "use_power",
-                "reduction_total_power", "total_power"):
-        val = dm.get(key)
-        if val:
-            day_power = float(val)
-            logger.info("[soiling] station %s day_power=%.2f from field '%s'", station_code, day_power, key)
-            break
-
-    # Fallback: compute from specific energy × capacity
-    if not day_power and dm.get("perpower_ratio") and capacity:
-        day_power = float(dm["perpower_ratio"]) * capacity
-        logger.info("[soiling] station %s day_power=%.2f computed from perpower_ratio", station_code, day_power)
+    logger.info("[soiling] station %s: computing — hour_local=%d, day_power=%s, capacity=%s",
+                station_code, hour_local, day_power, capacity)
 
     features = {
         "installed_capacity_kwp":   capacity,
@@ -108,11 +95,9 @@ def predict_for_station(
         "days_since_last_cleaning": _days_since_last_cleaning(station_code, db),
     }
 
-    # Yesterday's weather from Open-Meteo (matches the daily KPI window)
     coords = fs.get_station_location(station_code)
     if coords:
-        weather = weather_svc.get_weather(*coords, yesterday=True)
-        features.update(weather)
+        features.update(weather_svc.get_weather(*coords))
 
     # power_ratio = day_power / (capacity * irradiation_kwh_m2)
     irrad = features.get("irradiation_kwh_m2", 5.5)
@@ -120,7 +105,16 @@ def predict_for_station(
         p_theoretical = capacity * irrad
         features["power_ratio"] = float(min(day_power / p_theoretical, 1.5)) if p_theoretical > 0 else None
 
-    return soiling_service.predict_soiling(features)
+    result = soiling_service.predict_soiling(features)
+
+    # Cache the result for this solar day
+    _soiling_daily_cache[station_code] = {
+        "result": result, "date": today_str, "capacity": capacity,
+    }
+    logger.info("[soiling] station %s: cached prediction — soiling=%.4f (%s)",
+                station_code, result["soiling_index"], result["status"])
+
+    return result
 
 
 def _predict_demo(station_code: str, db: Session) -> dict:
