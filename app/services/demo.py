@@ -315,11 +315,16 @@ def seed_demo_accounts():
     db = SessionLocal()
     try:
         if not db.query(User).filter_by(email=DEMO_CLIENT_EMAIL).first():
+            from app.models import InstallationType, AlertPreference
             client = User(
                 email=DEMO_CLIENT_EMAIL,
                 password_hash=hash_password(DEMO_CLIENT_PASSWORD),
-                full_name="Client Démo",
+                full_name="Ahmed El Mansouri",
                 role=UserRole.client,
+                phone="+212 661 234 567",
+                installation_type=InstallationType.residentielle,
+                num_panels=6,
+                alert_preference=AlertPreference.email,
             )
             db.add(client)
             db.flush()
@@ -327,6 +332,7 @@ def seed_demo_accounts():
                 client_id=client.id,
                 station_code=DEMO_STATION_CODE,
                 station_name=DEMO_STATION_NAME,
+                installed_capacity_kwp=3.3,
             ))
             logger.info("[demo] demo client created")
 

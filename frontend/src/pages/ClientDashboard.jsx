@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import SoilingGauge from "../components/SoilingGauge";
-import { Home, BarChart3, Bell, Settings, LogOut, RefreshCw, Sun, Zap, Plug, Coins, Leaf, Thermometer, AlertTriangle, Flame, Radio, CheckCircle, Wrench, Send, Clock, CalendarDays, ChevronDown, ChevronUp, ClipboardList, MapPin, Users, ArrowRight, Plus, Lock, Eye, EyeOff } from "lucide-react";
+import { Home, BarChart3, Bell, Settings, LogOut, RefreshCw, Sun, Zap, Plug, Coins, Leaf, Thermometer, AlertTriangle, Flame, Radio, CheckCircle, Wrench, Send, Clock, CalendarDays, ChevronDown, ChevronUp, ClipboardList, MapPin, Users, ArrowRight, Plus, Lock, Eye, EyeOff, Phone, Mail, User, Shield, Wifi, Grid, BatteryCharging } from "lucide-react";
 import Logo from "../components/Logo";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -1275,156 +1275,209 @@ function ReglagesTab({ kpi, lastSync, stationName, stations }) {
   const INSTALL_LABELS = { residentielle: "Résidentielle", commerciale: "Commerciale", industrielle: "Industrielle" };
   const ALERT_LABELS = { email: "Email", whatsapp: "WhatsApp", both: "Email + WhatsApp" };
 
+  const initials = (user?.full_name || "C").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+
+  const InfoRow = ({ icon, label, value }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 0", borderBottom: "1px solid #F1F5F9" }}>
+      <div style={{ width: 36, height: 36, borderRadius: "10px", background: "#F0F9FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: "11px", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>{label}</p>
+        <p style={{ fontSize: "14px", fontWeight: "600", color: "#1A202C", margin: "2px 0 0" }}>{value || "—"}</p>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <PageHeader title="Réglages" stationName={stationName} />
-      <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ padding: "0 1.5rem 2rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-        {/* Profil */}
-        <div style={card}>
-          <p style={sectionTitle}>Profil</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1.5rem" }}>
-            <div><p style={fieldLbl}>Nom Complet</p><p style={fieldVal}>{user?.full_name || "Client"}</p></div>
-            <div><p style={fieldLbl}>Email</p><p style={fieldVal}>{user?.email || "--"}</p></div>
-            <div><p style={fieldLbl}>Téléphone</p><p style={fieldVal}>{user?.phone || "--"}</p></div>
-            <div><p style={fieldLbl}>Type d'installation</p><p style={fieldVal}>{INSTALL_LABELS[user?.installation_type] || "--"}</p></div>
-            <div><p style={fieldLbl}>Nombre de panneaux</p><p style={fieldVal}>{user?.num_panels || "--"}</p></div>
-            <div><p style={fieldLbl}>Préférence d'alerte</p><p style={fieldVal}>{ALERT_LABELS[user?.alert_preference] || "--"}</p></div>
+        {/* ── Profile Hero ── */}
+        <div style={{ ...card, padding: "1.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
+            {/* Avatar */}
+            <div style={{
+              width: 72, height: 72, borderRadius: "50%",
+              background: "linear-gradient(135deg, #14B8A6 0%, #0EA5E9 100%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "26px", fontWeight: "700", color: "#fff", flexShrink: 0,
+              boxShadow: "0 4px 14px rgba(14,165,233,0.35)",
+            }}>{initials}</div>
+
+            {/* Name + role */}
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: "22px", fontWeight: "700", color: "#1A202C", margin: 0 }}>{user?.full_name || "Client"}</p>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "13px", color: "#6B7280" }}>{user?.email}</span>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#D1D5DB" }} />
+                <span style={{
+                  fontSize: "11px", fontWeight: "600", padding: "2px 10px", borderRadius: "20px",
+                  background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0",
+                }}>Client actif</span>
+              </div>
+            </div>
+
+            {/* Quick stats */}
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              {[
+                { label: "Panneaux", value: user?.num_panels ?? "—" },
+                { label: "Installation", value: INSTALL_LABELS[user?.installation_type] || "—" },
+                { label: "Capacité", value: capacity !== "--" ? `${capacity} kWc` : "—" },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ textAlign: "center", padding: "0.75rem 1.25rem", background: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+                  <p style={{ fontSize: "18px", fontWeight: "700", color: "#1A202C", margin: 0 }}>{value}</p>
+                  <p style={{ fontSize: "11px", color: "#9CA3AF", margin: "3px 0 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Change Password */}
+        {/* ── Two-column: Contact + Installation ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+
+          {/* Contact */}
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+              <p style={sectionTitle}>Informations de contact</p>
+            </div>
+            <InfoRow icon={<User size={16} color="#0EA5E9" />}  label="Nom complet"        value={user?.full_name} />
+            <InfoRow icon={<Mail size={16} color="#0EA5E9" />}  label="Adresse email"       value={user?.email} />
+            <InfoRow icon={<Phone size={16} color="#0EA5E9" />} label="Téléphone"           value={user?.phone} />
+            <InfoRow icon={<Bell size={16} color="#0EA5E9" />}  label="Préférence d'alerte" value={ALERT_LABELS[user?.alert_preference]} />
+          </div>
+
+          {/* Installation */}
+          <div style={card}>
+            <p style={sectionTitle}>Installation solaire</p>
+            <InfoRow icon={<Sun size={16} color="#F59E0B" />}          label="Puissance crête"        value={capacity !== "--" ? `${capacity} kWc` : null} />
+            <InfoRow icon={<Grid size={16} color="#F59E0B" />}          label="Nombre de panneaux"     value={user?.num_panels ? `${user.num_panels} panneaux` : null} />
+            <InfoRow icon={<Zap size={16} color="#F59E0B" />}          label="Type d'installation"    value={INSTALL_LABELS[user?.installation_type]} />
+            <InfoRow icon={<MapPin size={16} color="#F59E0B" />}       label="Localisation"           value={settings.location || "Maroc"} />
+          </div>
+        </div>
+
+        {/* ── Security: Change Password ── */}
         <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1rem" }}>
-            <Lock size={16} color="#6366F1" />
-            <p style={{ ...sectionTitle, marginBottom: 0 }}>Changer le mot de passe</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1.25rem" }}>
+            <div style={{ width: 36, height: 36, borderRadius: "10px", background: "#F5F3FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Shield size={17} color="#6366F1" />
+            </div>
+            <div>
+              <p style={{ ...sectionTitle, marginBottom: 0 }}>Sécurité du compte</p>
+              <p style={{ fontSize: "12px", color: "#9CA3AF", margin: 0 }}>Modifiez votre mot de passe régulièrement</p>
+            </div>
           </div>
           {pwMsg.text && (
             <div style={{
-              padding: "0.5rem 0.75rem", borderRadius: "6px", fontSize: "13px", marginBottom: "0.75rem",
+              padding: "0.6rem 0.9rem", borderRadius: "8px", fontSize: "13px", marginBottom: "1rem",
               background: pwMsg.type === "success" ? "#F0FDF4" : "#FEF2F2",
               border: `1px solid ${pwMsg.type === "success" ? "#BBF7D0" : "#FECACA"}`,
               color: pwMsg.type === "success" ? "#16A34A" : "#DC2626",
-            }}>{pwMsg.text}</div>
+              display: "flex", alignItems: "center", gap: "8px",
+            }}>
+              {pwMsg.type === "success" ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+              {pwMsg.text}
+            </div>
           )}
-          <form onSubmit={handleChangePassword} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", alignItems: "end" }}>
+          <form onSubmit={handleChangePassword} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "1rem", alignItems: "end" }}>
             <div>
               <p style={fieldLbl}>Mot de passe actuel</p>
               <div style={{ position: "relative" }}>
-                <input style={{ ...inputSty, paddingRight: "2.5rem" }} type={pwShow ? "text" : "password"} placeholder="â?¢â?¢â?¢â?¢â?¢â?¢â?¢â?¢"
+                <input style={{ ...inputSty, paddingRight: "2.5rem" }} type={pwShow ? "text" : "password"} placeholder="••••••••"
                   value={pwForm.current} onChange={e => setPwForm({ ...pwForm, current: e.target.value })} required />
-                <button type="button" onClick={() => setPwShow(p => !p)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", padding: 0, lineHeight: 1 }}>
-                  {pwShow ? <EyeOff size={16} /> : <Eye size={16} />}
+                <button type="button" onClick={() => setPwShow(p => !p)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", padding: 0 }}>
+                  {pwShow ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
             <div>
               <p style={fieldLbl}>Nouveau mot de passe</p>
-              <input style={inputSty} type={pwShow ? "text" : "password"} placeholder="Min. 6 caracteres"
+              <input style={inputSty} type={pwShow ? "text" : "password"} placeholder="Min. 6 caractères"
                 value={pwForm.newPw} onChange={e => setPwForm({ ...pwForm, newPw: e.target.value })} required />
             </div>
             <div>
-              <p style={fieldLbl}>Confirmer</p>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input style={{ ...inputSty, flex: 1 }} type={pwShow ? "text" : "password"} placeholder="Répéter"
-                  value={pwForm.confirm} onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })} required />
-                <button type="submit" disabled={pwLoading} style={{
-                  padding: "0.5rem 1rem", background: "#6366F1", color: "#fff", border: "none",
-                  borderRadius: "6px", fontSize: "13px", fontWeight: "600", cursor: pwLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap",
-                }}>
-                  {pwLoading ? "..." : "Modifier"}
-                </button>
-              </div>
+              <p style={fieldLbl}>Confirmer le mot de passe</p>
+              <input style={inputSty} type={pwShow ? "text" : "password"} placeholder="Répéter"
+                value={pwForm.confirm} onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })} required />
             </div>
+            <button type="submit" disabled={pwLoading} style={{
+              padding: "0.55rem 1.25rem", background: "#6366F1", color: "#fff", border: "none",
+              borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: pwLoading ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap", opacity: pwLoading ? 0.7 : 1,
+            }}>
+              {pwLoading ? "..." : "Enregistrer"}
+            </button>
           </form>
         </div>
 
-        {/* Installation */}
-        <div style={card}>
-          <p style={sectionTitle}>Détails de l'installation</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
-            <div>
-              <p style={fieldLbl}>Nom de l'installation</p>
-              <input style={inputSty} value={settings.installName || "Mon installation"} onChange={e => upd("installName", e.target.value)} />
-            </div>
-            <div>
-              <p style={fieldLbl}>Emplacement</p>
-              <input style={inputSty} value={settings.location || "Maroc"} onChange={e => upd("location", e.target.value)} />
-            </div>
-            <div>
-              <p style={fieldLbl}>Puissance Crête</p>
-              <p style={{ ...fieldVal, color: "#6B7280" }}>{capacity !== "--" ? `${capacity} kWc` : "--"}</p>
-            </div>
-          </div>
-        </div>
+        {/* ── Notifications + API Status ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
 
-        {/* Soiling thresholds â?? info only */}
-        <div style={card}>
-          <p style={sectionTitle}>Seuils d'Alerte d'Encrassement</p>
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <div style={{ flex: 1, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "#16A34A", margin: 0 }}>Propre</p>
-              <p style={{ fontSize: "12px", color: "#6B7280", margin: "4px 0 0" }}>Propreté &gt; 85%</p>
-            </div>
-            <div style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "#D97706", margin: 0 }}>Attention</p>
-              <p style={{ fontSize: "12px", color: "#6B7280", margin: "4px 0 0" }}>60% â?? 85%</p>
-            </div>
-            <div style={{ flex: 1, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "12px", textAlign: "center" }}>
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "#DC2626", margin: 0 }}>Critique</p>
-              <p style={{ fontSize: "12px", color: "#6B7280", margin: "4px 0 0" }}>Propreté &lt; 60%</p>
-            </div>
-          </div>
-          <p style={{ fontSize: "12px", color: "#6B7280", marginTop: "8px" }}>
-            Les seuils sont fixes et appliqués automatiquement par le système.
-          </p>
-        </div>
-
-        {/* Notifications */}
-        <div style={card}>
-          <p style={sectionTitle}>Préférences de Notification</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
-            {[
-              ["soilingAlerts",  "Alertes d'encrassement"],
-              ["emailReports",   "Rapports d'email automatiques"],
-              ["smsUrgency",     "SMS d'urgence (pour alarmes critiques)"],
-              ["monthlyReport",  "Rapport de synthèse mensuel"],
-            ].map(([key, label]) => (
-              <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Toggle value={settings[key] !== false} onChange={v => upd(key, v)} />
-                <span style={{ fontSize: "13px", color: "#374151" }}>{label}</span>
+          {/* Notifications */}
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1.25rem" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "10px", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Bell size={17} color="#F59E0B" />
               </div>
-            ))}
-          </div>
-
-          {/* WhatsApp Bot */}
-          <WhatsAppSection phone={user?.phone} />
-        </div>
-
-        {/* FusionSolar + App Prefs */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div style={card}>
-            <p style={sectionTitle}>Connexion API FusionSolar</p>
-            <p style={{ fontSize: "13px", marginBottom: "4px" }}>Statut: <span style={{ color: "#16A34A", fontWeight: "600" }}>Connecté</span></p>
-            <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "4px" }}>
-              Dernière synchro: {syncAgo != null ? `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}` : "?"}
-            </p>
-            <p style={{ fontSize: "13px", color: "#6B7280" }}>Crédentiels: <span style={{ fontFamily: "monospace" }}>â?¢â?¢â?¢â?¢â?¢â?¢â?¢â?¢</span></p>
-          </div>
-          <div style={card}>
-            <p style={sectionTitle}>App Préférences</p>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.875rem" }}>
-              <Toggle value={settings.darkMode || false} onChange={v => upd("darkMode", v)} />
-              <span style={{ fontSize: "13px" }}>Mode Sombre</span>
+              <p style={{ ...sectionTitle, marginBottom: 0 }}>Préférences de notification</p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "13px" }}>Language</span>
-              <select value={settings.language || "fr"} onChange={e => upd("language", e.target.value)}
-                style={{ padding: "4px 8px", border: "1px solid #E2E8F0", borderRadius: "6px", fontSize: "13px", flex: 1 }}>
-                <option value="fr">Français / Arabe / Anglais</option>
-                <option value="ar">Arabe</option>
-                <option value="en">Anglais</option>
-              </select>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {[
+                ["soilingAlerts", "Alertes d'encrassement"],
+                ["emailReports",  "Rapports automatiques par email"],
+                ["smsUrgency",    "SMS pour alarmes critiques"],
+                ["monthlyReport", "Rapport mensuel de synthèse"],
+              ].map(([key, label]) => (
+                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "13px", color: "#374151" }}>{label}</span>
+                  <Toggle value={settings[key] !== false} onChange={v => upd(key, v)} />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid #F1F5F9" }}>
+              <WhatsAppSection phone={user?.phone} />
+            </div>
+          </div>
+
+          {/* Right column: API status + alert thresholds */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+            {/* FusionSolar status */}
+            <div style={card}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1rem" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "10px", background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Wifi size={17} color="#16A34A" />
+                </div>
+                <p style={{ ...sectionTitle, marginBottom: 0 }}>Connexion FusionSolar</p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16A34A", display: "inline-block" }} />
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#16A34A" }}>Connecté et opérationnel</span>
+              </div>
+              <p style={{ fontSize: "12px", color: "#9CA3AF", margin: 0 }}>
+                Dernière synchro : {syncAgo != null ? `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}` : "—"}
+              </p>
+              <p style={{ fontSize: "12px", color: "#9CA3AF", margin: "4px 0 0" }}>Station : {stationName || "—"}</p>
+            </div>
+
+            {/* Alert thresholds */}
+            <div style={card}>
+              <p style={sectionTitle}>Seuils d'alerte encrassement</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {[
+                  { label: "Propre", range: "Propreté > 85%", bg: "#F0FDF4", border: "#BBF7D0", color: "#16A34A" },
+                  { label: "Attention", range: "60% – 85%", bg: "#FFFBEB", border: "#FDE68A", color: "#D97706" },
+                  { label: "Critique", range: "Propreté < 60%", bg: "#FEF2F2", border: "#FECACA", color: "#DC2626" },
+                ].map(t => (
+                  <div key={t.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: t.bg, border: `1px solid ${t.border}`, borderRadius: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: t.color }}>{t.label}</span>
+                    <span style={{ fontSize: "12px", color: "#6B7280" }}>{t.range}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
