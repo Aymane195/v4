@@ -134,33 +134,46 @@ def predict_for_station(
 def _predict_demo(station_code: str, db: Session) -> dict:
     """
     Run the real RandomForest model with typical Morocco residential demo parameters.
-    Varies slightly based on time of day to make the dashboard feel live.
+    When DEMO_FORCE_CRITIQUE is True, forces a worst-case soiling scenario.
     """
     import math
     from datetime import datetime
+    from app.services.demo import DEMO_FORCE_CRITIQUE
+
+    if DEMO_FORCE_CRITIQUE:
+        features = {
+            "irradiation_kwh_m2":       5.5,
+            "temp_air_c":               34.0,
+            "humidity_pct":             22.0,
+            "wind_speed_ms":            8.5,
+            "precipitation_mm":         0.0,
+            "days_since_last_rain":     38,
+            "days_since_last_cleaning": 45,
+            "installed_capacity_kwp":   10.0,
+            "power_ratio":              0.57,
+        }
+        return soiling_service.predict_soiling(features)
 
     now = datetime.utcnow()
     hour = now.hour + now.minute / 60.0
 
-    # Simulate gradual dust accumulation: worst mid-afternoon, resets after rain
     dust_cycle = abs(math.sin(now.timetuple().tm_yday / 30.0 * math.pi))
-    days_since_rain    = int(5 + 25 * dust_cycle)           # 5–30 days
-    days_since_clean   = _days_since_last_cleaning(station_code, db)  # real DB value
+    days_since_rain  = int(5 + 25 * dust_cycle)
+    days_since_clean = _days_since_last_cleaning(station_code, db)
 
-    # Simulate realistic power_ratio: high at noon, lower at edges of day, reduced by dust
-    solar_peak = max(0.0, math.sin(math.pi * (hour - 6) / 14)) if 6 <= hour <= 20 else 0.0
-    dust_loss  = 0.05 + 0.20 * dust_cycle                   # 5–25% dust loss
+    solar_peak  = max(0.0, math.sin(math.pi * (hour - 6) / 14)) if 6 <= hour <= 20 else 0.0
+    dust_loss   = 0.05 + 0.20 * dust_cycle
     power_ratio = max(0.45, solar_peak * (1.0 - dust_loss)) if solar_peak > 0 else 0.75
 
     features = {
-        "irradiation_kwh_m2":       5.5,       # Morocco average
+        "irradiation_kwh_m2":       5.5,
         "temp_air_c":               28.0,
         "humidity_pct":             45.0,
         "wind_speed_ms":            4.5,
         "precipitation_mm":         0.0,
         "days_since_last_rain":     days_since_rain,
         "days_since_last_cleaning": days_since_clean,
-        "installed_capacity_kwp":   10.0,       # typical residential 10 kWp
+        "installed_capacity_kwp":   10.0,
         "power_ratio":              round(power_ratio, 3),
     }
 

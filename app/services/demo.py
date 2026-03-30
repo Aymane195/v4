@@ -16,6 +16,11 @@ DEMO_EMPLOYEE_PASSWORD = "demo123"
 DEMO_STATION_CODE = "DEMO-STATION-001"
 DEMO_STATION_NAME = "Installation Démo — Casablanca"
 
+# ── Demo mode flag ─────────────────────────────────────────────────────────────
+# True  → forced critique scenario (heavy soiling, all alarms, low production)
+# False → normal variable behaviour (soiling varies by time of day / season)
+DEMO_FORCE_CRITIQUE = True
+
 
 def is_demo(station_code: str) -> bool:
     return station_code == DEMO_STATION_CODE
@@ -36,9 +41,20 @@ def _solar_factor() -> float:
 def realtime_kpi() -> dict:
     factor   = _solar_factor()   # 0 at night (20h–6h), bell curve during the day
     capacity = round(random.uniform(9, 14), 1)          # kWp installed
-    power    = round(capacity * factor * random.uniform(0.82, 0.98), 2) if factor > 0 else 0.0
+
+    if DEMO_FORCE_CRITIQUE:
+        # Heavy soiling — production reduced ~38%, inverter in fault state
+        eff = random.uniform(0.57, 0.63)
+        power = round(capacity * factor * eff, 2) if factor > 0 else 0.0
+        health_state = 1          # fault / critical
+        perf_ratio   = round(random.uniform(0.55, 0.65), 3)
+    else:
+        power = round(capacity * factor * random.uniform(0.82, 0.98), 2) if factor > 0 else 0.0
+        health_state = 3          # normal
+        perf_ratio   = round(random.uniform(0.78, 0.96), 3)
+
     elapsed  = max(3, datetime.now().hour - 6)          # hours since sunrise for day energy
-    day_pwr  = round(power * elapsed * 0.6 * random.uniform(0.9, 1.1), 2) if factor > 0 else round(random.uniform(15, 45), 2)
+    day_pwr  = round(power * elapsed * 0.6 * random.uniform(0.9, 1.1), 2) if factor > 0 else round(random.uniform(8, 18), 2)
     total    = round(random.uniform(9000, 16000), 2)
     radiation = round(1000 * factor * random.uniform(0.78, 1.02), 1) if factor > 0 else 0.0
 
@@ -56,8 +72,8 @@ def realtime_kpi() -> dict:
                 "day_on_grid_energy":  round(day_pwr * random.uniform(0.2, 0.55), 2),
                 "day_income":          round(day_pwr * 1.5, 2),
                 "total_income":        round(total * 1.5, 2),
-                "real_health_state":   3,
-                "performance_ratio":   round(random.uniform(0.78, 0.96), 3),
+                "real_health_state":   health_state,
+                "performance_ratio":   perf_ratio,
                 "radiation_intensity": radiation,
                 "installed_capacity":  capacity,
             },
@@ -88,6 +104,21 @@ def monthly_kpi(month_str: str) -> dict:
 def soiling(days_since_last_cleaning: int = 30) -> dict:
     """Real model prediction using typical Morocco demo parameters."""
     from app.services.soiling import predict_soiling
+
+    if DEMO_FORCE_CRITIQUE:
+        # Force worst-case scenario: 38-day drought, 45-day no cleaning, heavy dust
+        return predict_soiling({
+            "irradiation_kwh_m2":       5.5,
+            "temp_air_c":               34.0,
+            "humidity_pct":             22.0,   # very dry — dust sticks better
+            "wind_speed_ms":            8.5,    # high wind → heavy dust deposit
+            "precipitation_mm":         0.0,
+            "days_since_last_rain":     38,
+            "days_since_last_cleaning": 45,
+            "installed_capacity_kwp":   10.0,
+            "power_ratio":              0.57,   # 43% loss → CRITIQUE
+        })
+
     dust_cycle = abs(math.sin(datetime.utcnow().timetuple().tm_yday / 30.0 * math.pi))
     days_since_rain = int(5 + 25 * dust_cycle)
     power_ratio = round(max(0.50, 0.92 - 0.30 * dust_cycle), 3)
@@ -126,7 +157,7 @@ _ALARM_POOL = [
 def alarms() -> list:
     now = datetime.now()
     now_ms = int(now.timestamp() * 1000)
-    count  = random.randint(1, 3)
+    count  = len(_ALARM_POOL) if DEMO_FORCE_CRITIQUE else random.randint(1, 3)
     picked = random.sample(_ALARM_POOL, min(count, len(_ALARM_POOL)))
     result = []
     for a in picked:
@@ -141,6 +172,17 @@ def alarms() -> list:
 
 def device_kpi() -> dict:
     factor = _solar_factor()
+    if DEMO_FORCE_CRITIQUE:
+        # Inverter running hot + low efficiency due to heavy soiling
+        return {
+            "success": True,
+            "data": [{
+                "dataItemMap": {
+                    "temperature": round(random.uniform(68, 78), 1) if factor > 0.1 else round(random.uniform(35, 48), 1),
+                    "efficiency":  round(random.uniform(0.55, 0.63), 3) if factor > 0.1 else None,
+                }
+            }],
+        }
     return {
         "success": True,
         "data": [{
@@ -176,18 +218,18 @@ def demo_interventions(client_id: int) -> list[dict]:
             "station_name": DEMO_STATION_NAME,
             "client_id": client_id,
             "client_name": "Client Démo",
-            "alarm_name": "Encrassement détecté — Soiling Index élevé",
-            "alarm_severity": 2,
+            "alarm_name": "Encrassement CRITIQUE — Soiling Index 43%",
+            "alarm_severity": 1,
             "type": "nettoyage",
-            "description": "Tempête de sable hier, production en baisse de 20%. Les panneaux sont visiblement couverts de poussière.",
-            "priority": "haute",
+            "description": "38 jours sans pluie, tempête de sable détectée. Production en baisse de 43%. Intervention urgente requise — chaque jour sans nettoyage représente une perte d'environ 52 DH.",
+            "priority": "critique",
             "status": "en_attente",
             "assigned_to": None,
             "scheduled_date": None,
             "completed_date": None,
             "employee_notes": None,
             "resolution": None,
-            "created_at": (now - timedelta(hours=3)).isoformat(),
+            "created_at": (now - timedelta(hours=2)).isoformat(),
         },
         {
             "id": 9002,
