@@ -1319,19 +1319,6 @@ function ReglagesTab({ kpi, lastSync, stationName, stations }) {
               </div>
             </div>
 
-            {/* Quick stats */}
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              {[
-                { label: "Panneaux", value: user?.num_panels ?? "—" },
-                { label: "Installation", value: INSTALL_LABELS[user?.installation_type] || "—" },
-                { label: "Capacité", value: capacity !== "--" ? `${capacity} kWc` : "—" },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ textAlign: "center", padding: "0.75rem 1.25rem", background: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
-                  <p style={{ fontSize: "18px", fontWeight: "700", color: "#1A202C", margin: 0 }}>{value}</p>
-                  <p style={{ fontSize: "11px", color: "#9CA3AF", margin: "3px 0 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 

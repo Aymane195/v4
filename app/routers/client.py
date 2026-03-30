@@ -80,6 +80,9 @@ def get_my_stations(
         entry = {"station_code": s.station_code, "station_name": s.station_name}
         if s.station_code in fs_meta:
             entry.update(fs_meta[s.station_code])
+        # DB capacity takes priority over FusionSolar (most reliable source)
+        if s.installed_capacity_kwp:
+            entry["installed_capacity"] = s.installed_capacity_kwp
         result.append(entry)
     return result
 

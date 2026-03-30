@@ -12,6 +12,17 @@ export function AuthProvider({ children }) {
     }
   });
 
+  // Always re-fetch fresh user data from DB on app load (catches profile updates)
+  useState(() => {
+    const token = sessionStorage.getItem("token");
+    if (token) {
+      api.get("/auth/me").then(res => {
+        sessionStorage.setItem("user", JSON.stringify(res.data));
+        setUser(res.data);
+      }).catch(() => {});
+    }
+  });
+
   async function login(email, password) {
     const { data } = await api.post("/auth/login", { email, password });
     sessionStorage.setItem("token", data.access_token);
