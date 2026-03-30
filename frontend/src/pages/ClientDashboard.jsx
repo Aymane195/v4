@@ -426,11 +426,13 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
     setLoading(true);
 
     async function loadFromApi() {
-      const now = new Date();
-      const yr  = now.getFullYear();
+      const now   = new Date();
+      const yr    = now.getFullYear();
+      const mo    = now.getMonth() + 1; // 1-12
       let data = [];
       try {
         if (period === "jour") {
+          // Last 7 days — 7 parallel daily calls (manageable load)
           data = await Promise.all(Array.from({ length: 7 }, (_, i) => {
             const dt = new Date(now); dt.setDate(dt.getDate() - (6 - i));
             const str = dt.toISOString().slice(0, 10);
@@ -439,30 +441,25 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
               .catch(() => ({ name: "", val: 0 }));
           }));
         } else if (period === "mois") {
-          // Single call → backend fetches 12 months sequentially with 1h cache (avoids rate limiting)
+          // Daily bars for the current month — backend reads from DB (collector) first,
+          // falls back to sequential FusionSolar calls for missing days
+          const r = await api.get(`/client/kpi/month-days?year=${yr}&month=${mo}`);
+          data = (r.data || []).map(item => ({ name: String(item.day), val: item.production_kwh || 0 }));
+        } else {
+          // Année view — monthly totals via sequential backend fetch (1h cache)
           const r = await api.get(`/client/kpi/annual?year=${yr}`);
           data = (r.data || []).map((item, i) => ({ name: MONTHS[i], val: item.month_power || 0 }));
-        } else {
-          // Année view: one call per year (3 requests, not 36)
-          data = await Promise.all(Array.from({ length: 3 }, (_, i) => {
-            const y = yr - 2 + i;
-            return api.get(`/client/kpi/annual?year=${y}`)
-              .then(r => { const total = (r.data || []).reduce((s, m) => s + (m.month_power || 0), 0); return { name: String(y), val: total }; })
-              .catch(() => ({ name: String(yr - 2 + i), val: 0 }));
-          }));
         }
       } catch { data = []; }
 
       if (cancelled) return;
       const sum = data.reduce((s, r) => s + (r.val || 0), 0);
-      return sum > 0 ? data : null; // null = API had no real data
+      return sum > 0 ? data : null;
     }
 
     loadFromApi().then(apiData => {
       if (cancelled) return;
-      // Historical data never changes — set once and never refresh automatically.
-      // If API failed (apiData=null), show static zero bars, not random demo values.
-      setChartData(apiData || generateDemoChart(period).map(r => ({ ...r, val: 0 })));
+      setChartData(apiData || []);
       setLoading(false);
     });
 

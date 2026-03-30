@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func, cast, Date
 from app.database import get_db
-from app.models import User, ClientStation, Intervention, InterventionType, InterventionStatus
+from app.models import User, ClientStation, Intervention, InterventionType, InterventionStatus, SolarMeasurement
 from app.auth import require_role
 from app.services.fusionsolar import client as fs
 from app.services import demo as demo_svc
@@ -12,6 +13,7 @@ import calendar
 import datetime
 import logging
 import threading
+import time as _time
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +142,98 @@ def get_monthly_kpi(
     return [_handle(fs.get_kpi_station_month, code, collect_time) for code in codes]
 
 
+@router.get("/kpi/month-days")
+def get_month_days_kpi(
+    year: int = Query(..., description="Year, e.g. 2026"),
+    month: int = Query(..., description="Month 1-12"),
+    current_user: User = Depends(_require_client),
+    db: Session = Depends(get_db),
+):
+    """
+    Daily production kWh for every day of the requested month.
+    Strategy: read MAX(day_power) per day from our DB (collector stores every 30 min).
+    For days not yet in DB, call FusionSolar getKpiStationDay sequentially.
+    Returns: list of {day: 1..31, production_kwh: float}
+    """
+    codes = _get_station_codes(current_user, db)
+    station_code = codes[0]
+
+    if demo_svc.is_demo(station_code):
+        import math
+        result = []
+        for d in range(1, 32):
+            try:
+                dt = datetime.date(year, month, d)
+            except ValueError:
+                break
+            solar = max(0.0, math.sin(math.pi * (d % 30) / 30) * 18 + (d % 7) * 0.5)
+            result.append({"day": d, "production_kwh": round(solar, 2)})
+        return result
+
+    import calendar as _cal
+    days_in_month = _cal.monthrange(year, month)[1]
+    today = datetime.date.today()
+
+    # ── Step 1: Read from DB (MAX day_power per calendar day) ─────────────
+    month_start = datetime.datetime(year, month, 1)
+    month_end   = datetime.datetime(year, month, days_in_month, 23, 59, 59)
+
+    db_rows = (
+        db.query(
+            cast(SolarMeasurement.recorded_at, Date).label("day"),
+            func.max(SolarMeasurement.day_power).label("production_kwh"),
+        )
+        .filter(
+            SolarMeasurement.station_code == station_code,
+            SolarMeasurement.recorded_at >= month_start,
+            SolarMeasurement.recorded_at <= month_end,
+            SolarMeasurement.day_power.isnot(None),
+            SolarMeasurement.day_power > 0,
+        )
+        .group_by(cast(SolarMeasurement.recorded_at, Date))
+        .all()
+    )
+    db_by_day = {row.day.day: float(row.production_kwh) for row in db_rows}
+    logger.info("[month-days] %s %d-%02d: %d days found in DB", station_code, year, month, len(db_by_day))
+
+    # ── Step 2: Fetch missing days from FusionSolar sequentially ──────────
+    result = []
+    for d in range(1, days_in_month + 1):
+        try:
+            day_date = datetime.date(year, month, d)
+        except ValueError:
+            break
+
+        if d in db_by_day:
+            result.append({"day": d, "production_kwh": db_by_day[d]})
+            continue
+
+        # Skip future days
+        if day_date > today:
+            result.append({"day": d, "production_kwh": 0.0})
+            continue
+
+        # Fetch from FusionSolar
+        production = 0.0
+        try:
+            dt = datetime.datetime(year, month, d)
+            collect_time = int(calendar.timegm(dt.timetuple()) * 1000)
+            resp = fs.get_kpi_station_day(station_code, collect_time)
+            data_list = resp.get("data") or []
+            item_map = data_list[0].get("dataItemMap", {}) if data_list else {}
+            production = float(item_map.get("day_power") or 0)
+            logger.info("[month-days] %s day %d/%02d/%d → %.2f kWh (FusionSolar)", station_code, d, month, year, production)
+        except Exception as e:
+            logger.warning("[month-days] %s day %d failed: %s", station_code, d, e)
+        result.append({"day": d, "production_kwh": production})
+        _time.sleep(0.25)  # 250ms between FusionSolar calls — avoids rate limiting
+
+    return result
+
+
 # Annual cache: { (user_id, year): (fetched_at_timestamp, data) }
 _annual_cache: dict[tuple, tuple] = {}
 _ANNUAL_CACHE_TTL = 3600  # 1 hour — monthly history never changes
-import time as _time
 
 
 @router.get("/kpi/annual")
@@ -199,10 +289,18 @@ def get_annual_kpi(
         except Exception as e:
             logger.warning("[annual] month %s failed: %s", date_str, e)
         result.append({"month": m, "month_power": month_power})
-        _time.sleep(0.2)  # 200ms pause — keeps us well below FusionSolar's rate limit
+        _time.sleep(0.3)  # 300ms pause between calls — stays well below FusionSolar rate limit
 
-    _annual_cache[cache_key] = (_time.time(), result)
-    logger.info("[annual] cached year %d: total=%.1f kWh", year, sum(r["month_power"] for r in result))
+    total = sum(r["month_power"] for r in result)
+    logger.info("[annual] year %d done: total=%.1f kWh", year, total)
+
+    # Only cache if we got real data — never cache an all-zero result (means API was failing)
+    if total > 0:
+        _annual_cache[cache_key] = (_time.time(), result)
+        logger.info("[annual] cached year %d", year)
+    else:
+        logger.warning("[annual] year %d returned all zeros — NOT caching, will retry next request", year)
+
     return result
 
 
