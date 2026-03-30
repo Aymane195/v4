@@ -446,9 +446,12 @@ function AnalysesTab({ kpi, deviceKpi, stations, stationName }) {
           const r = await api.get(`/client/kpi/month-days?year=${yr}&month=${mo}`);
           data = (r.data || []).map(item => ({ name: String(item.day), val: item.production_kwh || 0 }));
         } else {
-          // Année view — monthly totals via sequential backend fetch (1h cache)
-          const r = await api.get(`/client/kpi/annual?year=${yr}`);
-          data = (r.data || []).map((item, i) => ({ name: MONTHS[i], val: item.month_power || 0 }));
+          // Année view — last 12 months via dedicated history endpoint (sequential, 1h cache)
+          const r = await api.get(`/client/kpi/history`);
+          data = (r.data?.historique || []).map(item => ({
+            name: item.mois.slice(5),   // "2026-03" → "03"
+            val: item.production_kwh || 0,
+          }));
         }
       } catch { data = []; }
 

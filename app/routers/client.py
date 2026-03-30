@@ -142,6 +142,132 @@ def get_monthly_kpi(
     return [_handle(fs.get_kpi_station_month, code, collect_time) for code in codes]
 
 
+@router.get("/kpi/history")
+def get_kpi_history(
+    current_user: User = Depends(_require_client),
+    db: Session = Depends(get_db),
+):
+    """
+    Last 12 months of production history — one entry per month.
+
+    Flow:
+      1. Token already managed by FusionSolarClient singleton (re-login on expiry).
+      2. Calls getKpiStationMonth for each of the last 12 months sequentially
+         with 300ms delay between calls to stay under rate limits.
+      3. Extracts month_power, on_grid_power, use_power from each response.
+      4. Returns a clean structured JSON with totals and stats.
+
+    Result is cached 1 hour (history never changes for past months).
+    """
+    codes = _get_station_codes(current_user, db)
+    station_code = codes[0]
+    station_id   = station_code.replace("NE=", "").replace("ne=", "")
+
+    # Demo mode
+    if demo_svc.is_demo(station_code):
+        import math
+        now = datetime.datetime.utcnow()
+        historique = []
+        for i in range(11, -1, -1):
+            dt = (now.replace(day=1) - datetime.timedelta(days=i * 28)).replace(day=1)
+            prod = round(250 + 300 * abs(math.sin(math.pi * dt.month / 12)) + (dt.month % 3) * 40, 1)
+            historique.append({
+                "mois": dt.strftime("%Y-%m"),
+                "production_kwh": prod,
+                "injection_reseau_kwh": round(prod * 0.65, 1),
+                "consommation_propre_kwh": round(prod * 0.35, 1),
+            })
+        total = sum(h["production_kwh"] for h in historique)
+        return {
+            "station_id": station_id,
+            "periode": "12 derniers mois",
+            "historique": historique,
+            "total_annuel_kwh": round(total, 1),
+            "pic_mensuel_kwh": round(max(h["production_kwh"] for h in historique), 1),
+            "moyenne_mensuelle_kwh": round(total / len(historique), 1),
+        }
+
+    # Cache key per station (not per user — same station, same data)
+    cache_key = ("history_12m", station_code)
+    cached = _annual_cache.get(cache_key)
+    if cached:
+        fetched_at, data = cached
+        if _time.time() - fetched_at < _ANNUAL_CACHE_TTL:
+            logger.info("[history] serving cached 12-month history for %s", station_code)
+            return data
+
+    # Build list of last 12 months (oldest first)
+    now = datetime.datetime.utcnow()
+    months = []
+    for i in range(11, -1, -1):
+        # Go back i months from current month
+        year  = now.year  - ((now.month - 1 - (11 - i)) // 12 + (1 if (now.month - 1 - (11 - i)) < 0 else 0))
+        month = ((now.month - 1 - (11 - i)) % 12) + 1 if (now.month - 1 - (11 - i)) % 12 >= 0 else ((now.month - 1 - (11 - i)) % 12) + 13
+        # Simpler: subtract months via relativedelta-free arithmetic
+        total_months = now.year * 12 + (now.month - 1) - i
+        y = total_months // 12
+        m = total_months % 12 + 1
+        months.append((y, m))
+
+    logger.info("[history] fetching 12 months for %s: %s → %s",
+                station_code,
+                f"{months[0][0]}-{months[0][1]:02d}",
+                f"{months[-1][0]}-{months[-1][1]:02d}")
+
+    historique = []
+    for (y, m) in months:
+        label = f"{y}-{m:02d}"
+        production = on_grid = use = 0.0
+        try:
+            dt = datetime.datetime(y, m, 1)
+            collect_time = int(calendar.timegm(dt.timetuple()) * 1000)
+            resp = fs.get_kpi_station_month(station_code, collect_time)
+            data_list = resp.get("data") or []
+            item_map  = data_list[0].get("dataItemMap", {}) if data_list else {}
+
+            production = float(item_map.get("month_power")    or 0)
+            on_grid    = float(item_map.get("on_grid_power")  or
+                               item_map.get("day_on_grid_energy") or 0)
+            use        = float(item_map.get("use_power")       or
+                               item_map.get("day_use_energy")    or 0)
+
+            # If use/on_grid not in monthly KPI, estimate from production
+            if production > 0 and on_grid == 0 and use == 0:
+                on_grid = round(production * 0.65, 2)
+                use     = round(production * 0.35, 2)
+
+            logger.info("[history] %s %s → prod=%.1f  grid=%.1f  use=%.1f",
+                        station_code, label, production, on_grid, use)
+        except Exception as e:
+            logger.warning("[history] %s %s failed: %s", station_code, label, e)
+
+        historique.append({
+            "mois": label,
+            "production_kwh": round(production, 1),
+            "injection_reseau_kwh": round(on_grid, 1),
+            "consommation_propre_kwh": round(use, 1),
+        })
+        _time.sleep(0.3)
+
+    total = sum(h["production_kwh"] for h in historique)
+    result = {
+        "station_id": station_id,
+        "periode": "12 derniers mois",
+        "historique": historique,
+        "total_annuel_kwh": round(total, 1),
+        "pic_mensuel_kwh": round(max((h["production_kwh"] for h in historique), default=0), 1),
+        "moyenne_mensuelle_kwh": round(total / len(historique), 1) if historique else 0,
+    }
+
+    if total > 0:
+        _annual_cache[cache_key] = (_time.time(), result)
+        logger.info("[history] cached — total=%.1f kWh", total)
+    else:
+        logger.warning("[history] all zeros — not caching, will retry")
+
+    return result
+
+
 @router.get("/kpi/month-days")
 def get_month_days_kpi(
     year: int = Query(..., description="Year, e.g. 2026"),
